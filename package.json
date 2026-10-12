@@ -1,0 +1,11 @@
+{
+  "name": "pipo-robo-pet",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pipo — robot pet eyes (PWA thuần, không phụ thuộc)",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "serve": "python3 -m http.server 8080"
+  }
+}
