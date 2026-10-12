@@ -111,3 +111,7 @@ Trong artifact:
 - Chạy được: chọc, nựng, cho ăn, uống, toàn bộ biểu cảm, tiếng bíp (sau lần chạm đầu), chạm đúp xem giờ. Thêm `#debug` hoặc `#gallery` vào cuối link (artifact không truyền query string).
 - Não LLM: provider `claude-artifact` được bật tự động, dùng Claude Haiku có sẵn của artifact (không cần API key; lần chat đầu claude.ai hỏi quyền).
 - Không chạy: camera, mic, GPS, cảm biến chuyển động, thời tiết, gọi API LLM ngoài. Khung artifact chặn những thứ này; muốn dùng thì mở bản PWA qua HTTPS.
+
+## Bản public (GitHub Pages)
+
+Bản chạy thử đủ cảm biến nằm ở repo public [`ntnam2809/pipo`](https://github.com/ntnam2809/pipo) (Pages: https://ntnam2809.github.io/pipo/). Nguồn phát triển vẫn là `robo-pet/` ở repo này; phát hành bằng cách chép nguyên thư mục sang repo `pipo` rồi push `main`.
