@@ -174,6 +174,10 @@ export const EXPRESSIONS = {
     colorShift: { hue: 300, mix: 0.18 }, mouth: { shape: 'smile', curve: 0.62, open: 0.12, mw: 0.78 },
     loop: { period: 0.46, y: 0.05, abs: true, open: 0.34, my: 0.06 },
   }),
+  ko: P({   // bị bắn trúng, giả chết kiểu hoạt hình: mắt x, miệng o, sao bay vòng quanh đầu
+    label: 'Gục (giả chết)', s: { shape: 'x', w: 1.1, h: 1.1, glow: 0.45 }, fx: ['orbit'], blink: 0, colorShift: { hue: 205, mix: 0.35, sat: 0.7 }, light: 0.92,
+    spring: { all: [1.5, 0.4] }, mouth: { shape: 'o', open: 0.55, round: 0.55, mw: 0.5, curve: 0, wobble: 0.15 },
+  }),
   glitch: P({
     label: 'Nhiễu', s: { w: 1.1, h: 0.9, wobble: 1, glow: 1 }, fx: ['glitch'], blink: 0, spring: { all: [2.2, 0.4] },
     loop: { period: 0.06, x: 0.1, mx: 0.2 }, mouth: { shape: 'zigzag', mw: 0.9, curve: 0, open: 0.3, wobble: 1 },

@@ -64,7 +64,7 @@ function armPath(ctx, sx, sy, theta0, len, wid, bend) {
   const e = pts[N]; ctx.arc(e.x, e.y, e.hw, e.th + Math.PI, e.th, true);
   for (let i = N; i >= 0; i--) ctx.lineTo(R[i][0], R[i][1]);
   const s0 = pts[0]; ctx.arc(s0.x, s0.y, s0.hw, s0.th, s0.th + Math.PI, true); ctx.closePath();
-  const m = pts[Math.round(N * 0.55)]; return { mx: m.x, my: m.y, hw: m.hw, tipx: e.x, tipy: e.y };
+  const m = pts[Math.round(N * 0.55)]; return { mx: m.x, my: m.y, hw: m.hw, tipx: e.x, tipy: e.y, th: e.th };
 }
 
 /** Cung bóng loáng chạy dọc mép siêu elip (t0..t1 rad). */
@@ -77,6 +77,31 @@ function whiteGrad(ctx, x0, y0, x1, y1) {
   const g = ctx.createLinearGradient(x0, y0, x1, y1);
   g.addColorStop(0, '#ffffff'); g.addColorStop(0.42, '#eef2f8'); g.addColorStop(0.78, '#c4cedc'); g.addColorStop(1, '#8f9db2');
   return g;
+}
+
+/** Đầu tay đổi dạng theo shape của động tác: nắm đấm = củ tròn có vạch ngón, ngón cái = củ + mấu, chỉ = củ nhỏ + ngón. open/flat giữ nguyên dáng lá. */
+function tipDeco(ctx, shape, tx, ty, th, u, sc, frame) {
+  if (shape !== 'fist' && shape !== 'thumb' && shape !== 'point' && shape !== 'gun') return;
+  const dx = -Math.sin(th), dy = Math.cos(th), nx = -dy, ny = dx;   // dọc cánh tay (ra đầu tay) và pháp tuyến
+  const k = Math.pow(Math.max(0.5, sc), 0.8), br = 0.27 * u * k * (shape === 'point' || shape === 'gun' ? 0.84 : 1);
+  const cx = tx + dx * br * 0.5, cy = ty + dy * br * 0.5;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.38)'; ctx.shadowBlur = 0.1 * u; ctx.shadowOffsetY = 0.04 * u;
+  const body = (c) => { c.beginPath(); c.arc(cx, cy, br, 0, TAU); };
+  const nub = (x1, y1, x2, y2, w) => { ctx.beginPath(); const a = Math.atan2(y2 - y1, x2 - x1), r = w / 2; ctx.arc(x1, y1, r, a + Math.PI / 2, a + Math.PI * 1.5); ctx.arc(x2, y2, r, a - Math.PI / 2, a + Math.PI / 2); ctx.closePath(); };
+  ctx.fillStyle = whiteGrad(ctx, cx - br, cy - br, cx + br, cy + br);
+  if (shape === 'thumb') { const sd = nx > 0 ? -1 : 1; nub(cx + dx * br * 0.45 + nx * sd * br * 0.3, cy + dy * br * 0.45 + ny * sd * br * 0.3, cx + dx * br * 1.55 + nx * sd * br * 0.22, cy + dy * br * 1.55 + ny * sd * br * 0.22, br * 0.6); ctx.fill(); }
+  if (shape === 'point' || shape === 'gun') { nub(cx + dx * br * 0.5, cy + dy * br * 0.5, cx + dx * br * 1.95, cy + dy * br * 1.95, br * 0.56); ctx.fill(); }
+  if (shape === 'gun') { nub(cx + nx * br * 0.6, cy + ny * br * 0.6, cx + nx * br * 0.95 + dx * br * 0.7, cy + ny * br * 0.95 + dy * br * 0.7, br * 0.46); ctx.fill(); }
+  body(ctx); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  const sp = ctx.createRadialGradient(cx - br * 0.35, cy - br * 0.4, 0, cx - br * 0.35, cy - br * 0.4, br * 0.9); sp.addColorStop(0, 'rgba(255,255,255,0.9)'); sp.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = sp; body(ctx); ctx.fill();
+  ctx.fillStyle = hsl(frame.hue, frame.sat * 0.8, 62, 0.14); body(ctx); ctx.fill();
+  if (shape === 'fist') {   // vạch ngón: ba nét ngắn vuông góc cánh tay
+    ctx.strokeStyle = 'rgba(70,86,112,0.55)'; ctx.lineWidth = Math.max(1.2, 0.028 * u); ctx.lineCap = 'round';
+    for (const o of [-0.42, 0, 0.42]) { const bx = cx + nx * br * o + dx * br * 0.22, by = cy + ny * br * o + dy * br * 0.22; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + dx * br * 0.5, by + dy * br * 0.5); ctx.stroke(); }
+  }
+  ctx.restore();
 }
 
 function state(r) {
@@ -99,10 +124,10 @@ export default {
     const hx = st.hx.update(pose.sway * Ue, dt || 0.016), hy = st.hy.update(pose.bob * Ue, dt || 0.016);
     const bx = st.bx.update(pose.sway * Ue * 0.55, dt || 0.016), by = st.by.update(pose.bob * Ue * 0.8, dt || 0.016);
     const bt = st.bt.update(pose.tilt * 0.3, dt || 0.016), bs = st.bs.update(pose.squash, dt || 0.016);
-    const hover = pose.hover * Ue * 2.2;
+    const fl = pose.fall || null, hug = fl ? clamp(Math.abs(fl.tilt) / 1.2, 0, 1) * fl.w : 0, hover = pose.hover * Ue * 2.2 * (fl ? 1 - fl.w : 1);
     const neckY = ay - 0.07 * u;
 
-    r.paintBg(ctx);
+    r.paintBg(ctx); r.handPx = { L: null, R: null };
     // ---- nền: ánh sáng dịu quanh robot + sàn ----
     const floorY = ay + (BODY.bot + 0.55) * u;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -119,12 +144,17 @@ export default {
     // ---- bóng dưới sàn (nhỏ + nhạt khi bay cao) ----
     {
       const lift = clamp(-hover / u, -0.3, 0.6), k = 1 - 0.25 * lift;
-      ctx.save(); ctx.translate(ax + bx * 0.3, floorY); ctx.scale(1, 0.2); const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.25 * u * k);
+      const wide = fl ? 1 + 1.25 * fl.w * Math.abs(Math.sin(fl.tilt)) : 1;   // nằm xuống thì bóng dài ra
+      ctx.save(); ctx.translate(ax + bx * 0.3 + (fl ? -Math.sin(fl.tilt) * 0.6 * u : 0), floorY); ctx.scale(wide, 0.2); const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.25 * u * k);
       sg.addColorStop(0, `rgba(0,0,0,${0.9 - 0.3 * lift})`); sg.addColorStop(0.55, `rgba(0,0,0,${0.5 - 0.15 * lift})`); sg.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, 0, 1.25 * u * k, 0, TAU); ctx.fill(); ctx.restore();
     }
 
     ctx.translate(0, hover);
+    if (fl) {   // đổ cả người: xoay quanh điểm chạm sàn dưới đáy thân, rồi dồn về giữa màn và nâng lên cho nằm trên sàn
+      const th = fl.tilt * 0.95, s2 = Math.sin(th), lie = clamp(Math.abs(s2), 0, 1), sc = 1 - 0.24 * lie * lie;   // nằm xuống thì thu nhỏ chút cho vừa bề ngang màn
+      ctx.translate(ax - s2 * 2.3 * u * sc + fl.sway * Ue * 0.3, floorY - s2 * s2 * 0.62 * u * sc - Math.max(0, floorY + 0.95 * u * sc - (H - 6)) * lie); ctx.rotate(th); ctx.scale(sc, sc); ctx.translate(-ax, -floorY);   // màn thấp: nâng lên để tay rũ không tụt khỏi màn
+    }
     // ---- cổ (khe tối + vòng sáng theo màu mắt) ----
     ctx.save(); ctx.translate(bx * 0.5, by * 0.6);
     ctx.fillStyle = '#10151c'; ctx.beginPath(); ctx.ellipse(ax, ay + 0.02 * u, 0.5 * u, 0.2 * u, 0, 0, TAU); ctx.fill();
@@ -132,7 +162,7 @@ export default {
 
     // ---- thân + tay (cùng nhóm, thân nghiêng nhẹ theo đầu) ----
     const bodyXf = () => { ctx.translate(bx, by); ctx.translate(ax, ay + 1.0 * u); ctx.rotate(bt); ctx.scale(1 - bs * 0.1, 1 + bs * 0.12); ctx.translate(-ax, -(ay + 1.0 * u)); };
-    const raised = (side) => (side < 0 ? pose.armL : pose.armR).lift > 0.2;
+    const raised = (side) => { const a = side < 0 ? pose.armL : pose.armR; return a.lift > 0.2 || !!a.front; };
     ctx.save(); bodyXf();
     // thân
     ctx.save(); ctx.beginPath(); bodyPath(ctx, ax, ay, u);
@@ -157,28 +187,31 @@ export default {
       const phi = Math.atan2(out, -up + 0.02);
       const shx = ax + side * (bodyHalfW(ARM.shoulderY) + ARM.gap) * u, shy = ay + ARM.shoulderY * u;
       const theta = -side * phi, bend = side * A.curl * 1.15;
-      let len = ARM.len * u * (1 - 0.22 * clamp(-out, 0, 1)) * (1 - 0.3 * Math.pow(Math.abs(Math.sin(phi)), 1.5));   // tay dang ngang bị rút ngắn (phối cảnh)
+      const reach = A.reach || 1, sc = A.sc || 1;
+      let len = ARM.len * u * (reach > 1.05 ? 1 : (1 - 0.22 * clamp(-out, 0, 1)) * (1 - 0.3 * Math.pow(Math.abs(Math.sin(phi)), 1.5))) * reach;   // tay dang ngang bị rút ngắn (phối cảnh); tay động tác duỗi/rút theo reach
       const dx = -Math.sin(theta + bend * 0.6), room = (dx * side > 0 ? (side > 0 ? W - shx : shx) : 1e9) - 0.12 * u - Math.abs(bx);   // không để tay tràn khỏi màn
       if (Math.abs(dx) * len > room) len = Math.max(0.35 * u, room / Math.abs(dx));
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.38)'; ctx.shadowBlur = 0.1 * u; ctx.shadowOffsetY = 0.04 * u;
-      const m = armPath(ctx, shx, shy, theta, len, ARM.wid * u, bend);
+      const m = armPath(ctx, shx, shy, theta, len, ARM.wid * u * (1 + 0.3 * (Math.min(sc, 2.6) - 1)), bend);
       ctx.fillStyle = whiteGrad(ctx, m.mx - 0.3 * u, m.my - 0.3 * u, m.mx + 0.3 * u, m.my + 0.3 * u); ctx.fill();
       ctx.shadowColor = 'transparent'; ctx.clip();
       const sp = ctx.createRadialGradient(m.mx - 0.08 * u, m.my - 0.1 * u, 0, m.mx - 0.08 * u, m.my - 0.1 * u, 0.4 * u); sp.addColorStop(0, 'rgba(255,255,255,0.9)'); sp.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = sp; ctx.fillRect(m.mx - u, m.my - u, 2 * u, 2 * u);
       ctx.fillStyle = hsl(frame.hue, frame.sat * 0.8, 62, 0.16); ctx.beginPath(); ctx.arc(m.tipx, m.tipy, 0.2 * u, 0, TAU); ctx.fill();   // đầu tay hắt màu mắt
       ctx.restore();
+      if (A.shape) tipDeco(ctx, A.shape, m.tipx, m.tipy, m.th, u, sc, frame);
+      if (A.w > 0.3) { const T = ctx.getTransform(), p = T.transformPoint({ x: m.tipx, y: m.tipy }); r.handPx[side < 0 ? 'L' : 'R'] = { x: p.x / r.dpr, y: p.y / r.dpr, r: 0.4 * u * Math.pow(Math.max(0.6, sc), 0.8) }; }   // vị trí đầu tay: hit-test (đập tay) + fx
     };
     for (const side of [-1, 1]) if (!raised(side)) drawArm(side);
     ctx.restore();
 
     // vòng cổ phát sáng nhẹ theo màu mắt (thấy ở khe giữa đầu và thân)
-    ctx.save(); ctx.translate(hx * 0.6, hy * 0.6 + by * 0.4); ctx.strokeStyle = hsl(frame.hue, frame.sat, 62, 0.55); ctx.shadowColor = hsl(frame.hue, 100, 60, 0.9); ctx.shadowBlur = 0.12 * u; ctx.lineWidth = Math.max(1.5, 0.034 * u);
+    ctx.save(); ctx.translate(hx * 0.6, hy * 0.6 + by * 0.4 + 0.1 * u * hug); ctx.strokeStyle = hsl(frame.hue, frame.sat, 62, 0.55); ctx.shadowColor = hsl(frame.hue, 100, 60, 0.9); ctx.shadowBlur = 0.12 * u; ctx.lineWidth = Math.max(1.5, 0.034 * u);
     ctx.beginPath(); ctx.ellipse(ax, ay + 0.03 * u, 0.44 * u, 0.085 * u, 0, 0.1, Math.PI - 0.1); ctx.stroke(); ctx.restore();
 
     // ---- đầu (nghiêng quanh cổ, ép theo squash) ----
     ctx.save();
-    ctx.translate(hx, hy); ctx.translate(ax, neckY); ctx.rotate(pose.tilt); ctx.scale(1 + pose.squash * 0.55, 1 - pose.squash); ctx.translate(-ax, -neckY);
+    ctx.translate(hx, hy + 0.2 * u * hug); ctx.translate(ax, neckY); ctx.rotate(pose.tilt); ctx.scale(1 + pose.squash * 0.55, 1 - pose.squash); ctx.translate(-ax, -neckY);
     const hcy = ay + HEAD.cy * u, vcy = ay + VISOR.cy * u;
     ctx.save(); ctx.beginPath(); superPath(ctx, ax, hcy, HEAD.a * u, HEAD.b * u, HEAD.n, 0.94);
     ctx.fillStyle = whiteGrad(ctx, ax - 1.1 * u, hcy - 0.8 * u, ax + 1.1 * u, hcy + 0.8 * u); ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 0.2 * u; ctx.shadowOffsetY = 0.07 * u; ctx.fill();

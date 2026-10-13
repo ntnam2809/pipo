@@ -109,6 +109,22 @@ export class Renderer {
     ctx.translate(-g.cx, -g.cy);
   }
 
+  /** Gục ngã (pose.fall): cả mặt xoay nằm ngang quanh tâm, tụt xuống, ép dẹt; trả true nếu có áp. Dùng trong cặp save/restore của skin. */
+  applyFall(ctx, g, f) {
+    if (!f) return false;
+    const u = g.U; ctx.translate(g.cx + f.sway * u, g.cy + f.drop * u); ctx.rotate(f.tilt); ctx.scale(1 + f.squash * 0.55, 1 - f.squash); ctx.translate(-g.cx, -g.cy);
+    return true;
+  }
+
+  /** Bóng/ánh sàn dưới mặt đang nằm (classic): vệt sáng nhạt theo màu mắt, co giãn theo mức đã đổ. */
+  paintFloor(ctx, g, f) {
+    if (!f || f.w < 0.02) return;
+    const u = g.U, x = g.cx + f.sway * u, y = g.cy + (0.29 + f.drop * 0.55) * u, rx = u * (0.34 + 0.4 * Math.min(1, Math.abs(f.tilt))), ry = u * 0.05;
+    ctx.save(); ctx.globalAlpha = 0.5 * f.w; ctx.translate(x, y); ctx.scale(1, ry / rx);
+    const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, hsl(g.color.h, g.color.s * 0.5, 55, 0.35)); gr.addColorStop(1, hsl(g.color.h, g.color.s * 0.5, 55, 0));
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+
   /**
    * Vẽ MỘT khuôn mặt: glow + fx sau + mắt + miệng + nhiễu + fx trước (hình học g). Skin gọi lại hàm này.
    * o.glow=false: bỏ quầng sáng; o.clip(ctx): dựng path để cắt glow/mắt/miệng (Eve: trong kính mặt), fx không bị cắt.

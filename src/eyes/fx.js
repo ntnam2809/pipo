@@ -15,7 +15,11 @@ export class FX {
     if (this.tm[key] <= 0) { this.tm[key] += every * (0.7 + 0.6 * this.rng()); fn(); }
   }
   add(o) { this.p.push({ age: 0, ay: 0, vx: 0, vy: 0, rot: 0, vr: 0, a: 1, ...o }); if (this.p.length > 240) this.p.shift(); }
-  burst(name, geom, n = 6) { // phát một lần (vd. vụn khi cắn)
+  /** at = {x, y, r?}: phát tại điểm đó (vị trí tay) thay vì quanh mặt — dùng cho pow · slap · sparkles của động tác tay. */
+  burst(name, geom, n = 6, at = null) { // phát một lần (vd. vụn khi cắn)
+    if (name === 'pow') { const p = at || { x: geom.cx, y: geom.cy, r: geom.U * 0.1 }; this.add({ type: 'pow', x: p.x, y: p.y - (p.r || 0) * 0.2, life: 0.6, size: Math.max(geom.U * 0.05, (p.r || 0) * 0.72), rot: (this.rng() - 0.5) * 0.5 }); return; }
+    if (name === 'slap') { const p = at || { x: geom.cx, y: geom.cy, r: geom.U * 0.1 }; this.add({ type: 'ring', x: p.x, y: p.y, life: 0.55, size: Math.max(geom.U * 0.03, (p.r || 0) * 0.3) }); return; }
+    if (name === 'sparkles' && at) { for (let i = 0; i < n; i++) { const a = this.rng() * TAU, d = (at.r || geom.U * 0.08) * (1.2 + 1.4 * this.rng()); this.add({ type: 'spark', x: at.x + Math.cos(a) * d, y: at.y + Math.sin(a) * d - (at.r || 0) * 0.4, life: 0.85, size: geom.U * (0.022 + 0.03 * this.rng()), hue: 42 + this.rng() * 30 }); } return; }
     if (name === 'crumbs') for (let i = 0; i < n; i++) this._crumb(geom);
     if (name === 'hearts') for (let i = 0; i < n; i++) this._heart(geom);
     if (name === 'sparkles') for (let i = 0; i < n; i++) this._spark(geom);
@@ -82,6 +86,17 @@ export class FX {
         case 'sbub': { const r = s * (0.5 + 0.7 * Math.min(1, u * 1.2)); ctx.strokeStyle = 'rgba(190,230,255,0.8)'; ctx.fillStyle = 'rgba(190,230,255,0.15)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, u > 0.9 ? r * 1.3 : r, 0, TAU); ctx.fill(); ctx.stroke(); shineDot(ctx, r); break; }
         case 'bubble': { const r = s * (u > 0.85 ? 1 + (u - 0.85) * 4 : 1); ctx.strokeStyle = 'rgba(190,235,255,0.85)'; ctx.fillStyle = 'rgba(170,225,255,0.18)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); ctx.stroke(); shineDot(ctx, r); break; }
         case 'note': { const sc = 0.6 + 0.4 * Math.min(1, u * 6); ctx.scale(sc, sc); ctx.rotate(Math.sin(q.age * 4.2 + q.ph) * 0.25); ctx.fillStyle = ctx.strokeStyle = hsl(q.hue, 90, 72); ctx.shadowColor = hsl(q.hue, 90, 65, 0.8); ctx.shadowBlur = s * 0.8; note(ctx, s, q.beam); break; }
+        case 'pow': { // tia nổ truyện tranh: sao nhọn bùng ra rồi tan
+          const e = 1 - Math.pow(1 - Math.min(1, u * 3), 2), R = s * (0.7 + 1.5 * e), r0 = R * 0.52; ctx.rotate(q.rot + u * 0.25);
+          ctx.beginPath(); for (let i = 0; i < 16; i++) { const a = (i * TAU) / 16, rr = i % 2 ? r0 : R; i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath();
+          const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, R); gr.addColorStop(0, 'hsl(54,100%,88%)'); gr.addColorStop(0.55, 'hsl(44,100%,62%)'); gr.addColorStop(1, 'hsl(22,100%,56%)');
+          ctx.fillStyle = gr; ctx.shadowColor = 'hsla(40,100%,60%,0.9)'; ctx.shadowBlur = s * 0.6; ctx.fill(); ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = Math.max(1.5, s * 0.1); ctx.lineJoin = 'round'; ctx.stroke(); break;
+        }
+        case 'ring': { // sóng đập tay: hai vòng nở ra + vài vạch tỏa
+          ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = s * 0.5; ctx.lineCap = 'round';
+          for (const [k, d] of [[1, 0], [0.62, 0.18]]) { const uu = Math.max(0, u - d); ctx.lineWidth = Math.max(1, s * 0.34 * (1 - uu)); ctx.beginPath(); ctx.arc(0, 0, s * (0.9 + 3.6 * (1 - Math.pow(1 - uu, 2.2)) * k), 0, TAU); ctx.stroke(); }
+          ctx.lineWidth = Math.max(1.2, s * 0.22 * (1 - u)); for (let i = 0; i < 8; i++) { const a = (i * TAU) / 8 + 0.2, r1 = s * (1.8 + 2.6 * u), r2 = r1 + s * (1.1 - 0.6 * u); ctx.beginPath(); ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2); ctx.stroke(); } break;
+        }
         case 'crumb': { ctx.fillStyle = hsl(q.hue, 60, 55); ctx.fillRect(-s, -s, s * 2, s * 1.6); break; }
         case 'puff': { const r = s * (1 + u * 2.6); const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(235,245,255,0.55)'); gr.addColorStop(1, 'rgba(235,245,255,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); break; }
         case 'rain': { ctx.rotate(0.12); ctx.strokeStyle = 'rgba(160,200,255,0.55)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); break; }

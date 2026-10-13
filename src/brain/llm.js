@@ -3,7 +3,9 @@ import { EXPRESSION_IDS, isExpression } from '../eyes/expressions.js';
 import { SOUND_IDS } from '../audio/sounds.js';
 
 export const PROVIDERS = ['none', 'claude-artifact', 'anthropic', 'openai-compatible', 'gemini'];
-export const ACTIONS = ['none', 'sleep', 'wake', 'dance', 'look_around', 'follow_face'];
+export const ACTIONS = ['none', 'sleep', 'wake', 'dance', 'look_around', 'follow_face', 'wave', 'bye', 'salute', 'punch', 'highfive', 'fistbump', 'thumbsup', 'clap', 'point', 'peekaboo'];
+/** Động tác tay trong ACTIONS (main.js đổi sang phản xạ tay). */
+export const HAND_ACTIONS = ACTIONS.slice(ACTIONS.indexOf('wave'));
 // Claude luôn chạy Haiku (nhanh, rẻ); ô Model chỉ áp cho OpenAI-compatible / Gemini.
 export const DEFAULT_MODEL = 'claude-haiku-5-5';
 export const TIMEOUT_MS = 8000;
@@ -11,7 +13,8 @@ export const TIMEOUT_MS = 8000;
 export function buildSystemPrompt(name = 'Pipo') {
   return `Bạn là ${name}, một robot thú cưng nhỏ dễ thương, chỉ có đôi mắt và một cái miệng nhỏ. Bạn nói tiếng Việt cực ngắn (tối đa 12 từ), có thể chỉ đáp "bíp". Bạn hiền, tinh nghịch, không bao giờ chết hay bỏ đi.
 BẮT BUỘC chỉ trả về MỘT đối tượng JSON, không thêm chữ nào khác:
-{"expression":"<một trong: ${EXPRESSION_IDS.join('|')}>","intensity":0..1,"duration_ms":500..8000,"say":"…","sound":"<một trong: ${SOUND_IDS.join('|')}>","action":"${ACTIONS.join('|')}"}`;
+{"expression":"<một trong: ${EXPRESSION_IDS.join('|')}>","intensity":0..1,"duration_ms":500..8000,"say":"…","sound":"<một trong: ${SOUND_IDS.join('|')}>","action":"${ACTIONS.join('|')}"}
+action là động tác (không bắt buộc, chỉ dùng khi hợp ngữ cảnh): sleep ngủ · wake dậy · dance nhảy · look_around nhìn quanh · follow_face nhìn theo mặt · wave vẫy tay chào · bye vẫy tạm biệt · salute đưa tay lên trán tuân lệnh · punch đấm về phía người · highfive giơ tay chờ đập tay · fistbump cụng tay · thumbsup giơ ngón cái khen · clap vỗ tay · point chỉ vào người · peekaboo che mắt rồi ú òa.`;
 }
 
 export function buildContext({ name, needs, mood, hour, weather, recent = [], text = '' }) {

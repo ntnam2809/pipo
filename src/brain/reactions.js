@@ -40,6 +40,33 @@ export const DEFS = {
   nameCall: { priority: 4, cooldown: 1500, build: () => ({ expression: 'happy', duration: 2200, sound: 'hello', lookAt: { x: 0, y: 0 } }) },
   wake: { priority: 6, cooldown: 500, build: () => ({ expression: 'surprised', duration: 700, sound: 'wake', then: { expression: 'sleepy', duration: 1800, then: { expression: 'happy', duration: 1500 } } }) },
   dance: { priority: 6, cooldown: 1000, build: () => ({ expression: 'joy', duration: 4000, sound: 'joy', bounce: true, lookSeq: [{ t: 0, x: -0.6, y: 0 }, { t: 600, x: 0.6, y: 0 }, { t: 1200, x: -0.6, y: 0 }, { t: 1800, x: 0.6, y: 0 }, { t: 2400, x: 0, y: -0.3 }] }) },
+  // ---- động tác tay: it.clip = tên clip (eyes/handclips.js); main phát clip + âm theo sự kiện của clip ----
+  gWave: { priority: 5, cooldown: 1500, build: (n, p) => ({ expression: 'happy', duration: 2400, clip: 'wave', sound: 'hello', say: p.say }) },
+  gBye: { priority: 5, cooldown: 1500, build: (n, p) => ({ expression: 'happy', duration: 2800, clip: 'bye', sound: 'hello', say: p.say || 'Bai bai!', then: { expression: 'neutral', duration: 300 } }) },
+  gSalute: { priority: 5, cooldown: 1500, build: () => ({ expression: 'focus', duration: 2500, clip: 'salute', say: 'Rõ!', lookAt: { x: 0, y: -0.1 } }) },
+  gPunch: { priority: 5, cooldown: 1200, build: () => ({ expression: 'smug', duration: 1900, clip: 'punch', then: { expression: 'happy', duration: 900 } }) },
+  gCombo: { priority: 5, cooldown: 1500, build: () => ({ expression: 'smug', duration: 2700, clip: 'combo', then: { expression: 'excited', duration: 1100, sound: 'joy' } }) },
+  gHighfive: { priority: 5, cooldown: 2500, build: () => ({ expression: 'happy', duration: 3300, clip: 'highfive', lookAt: { x: 0.2, y: -0.05 } }) },
+  highfiveOk: { priority: 7, cooldown: 500, build: () => ({ expression: 'joy', duration: 2200, say: 'Bép!', jolt: 0.5, then: { expression: 'happy', duration: 1500 } }) },
+  highfiveMiss: { priority: 5, cooldown: 500, build: () => ({ expression: 'sad', duration: 1900, sound: 'sad', jolt: 0.2, say: 'Hứ...', then: { expression: 'neutral', duration: 300 } }) },
+  gFistbump: { priority: 5, cooldown: 1500, build: () => ({ expression: 'cool', duration: 2100, clip: 'fistbump', then: { expression: 'happy', duration: 1000 } }) },
+  gThumbsup: { priority: 5, cooldown: 1500, build: () => ({ expression: 'happy', duration: 2400, clip: 'thumbsup', sound: 'happy' }) },
+  gClap: { priority: 5, cooldown: 1500, build: (n, p) => ({ expression: 'joy', duration: p.dur || 3300, clip: 'clap', clipOpts: p.period ? { period: p.period } : null, sound: 'joy', bounce: true }) },
+  gPoint: { priority: 5, cooldown: 1500, build: () => ({ expression: 'smug', duration: 2300, clip: 'point', lookAt: { x: 0, y: 0 } }) },
+  gPeekaboo: { priority: 5, cooldown: 2000, build: () => ({ expression: 'blush', duration: 1700, clip: 'peekaboo', then: { expression: 'joy', duration: 1200 } }) },
+  // ---- bắn súng tay (giả chết hoạt hình): aim = bị chĩa súng (giơ tay đầu hàng, giữ tới khi hạ súng) · shotHit = trúng đạn (fall.js điều khiển thân) ----
+  aim: { priority: 8, cooldown: 1500, build: () => ({ expression: 'scared', intensity: 0.85, duration: 9000, hold: true, clip: 'handsup', sound: 'surprise', say: 'Đừng bắn!', lookAt: { x: 0, y: 0 }, jolt: 0.3 }) },
+  shotHit: { priority: 10, cooldown: 0, build: () => ({ expression: 'ko', duration: 9500, hold: true, sound: 'pow', burst: 'pow', shake: 1, jolt: 1, vibrate: 40 }) },
+  reviveTouch: { priority: 10, cooldown: 0, build: () => ({ expression: 'dizzy', duration: 1700, sound: 'dizzy', jolt: 0.6, then: { expression: 'happy', duration: 2000, sound: 'happy' } }) },
+  reviveSelf: { priority: 10, cooldown: 0, build: () => ({ expression: 'wink', duration: 2300, sound: 'happy', say: 'Hì, giả vờ đó!', then: { expression: 'happy', duration: 1400 } }) },
+  dodge: { priority: 10, cooldown: 0, build: () => ({ expression: 'smug', duration: 1500, sound: 'whoosh', say: 'Hụt rồi!', lookAt: { x: 0, y: 0 }, then: { expression: 'happy', duration: 900 } }) },
+  counter: { priority: 10, cooldown: 0, build: () => ({ expression: 'smug', duration: 2400, clip: 'gun', say: 'Pew!', lookAt: { x: 0, y: 0 }, then: { expression: 'happy', duration: 1000, sound: 'happy' } }) },
+  // ---- gặp bạn Pipo bằng tiếng bíp: tiếng bíp thật do audio/meetsession phát (nhép miệng theo chirp.level), ở đây chỉ là biểu cảm/động tác ----
+  meetSearch: { priority: 3, cooldown: 0, build: () => ({ expression: 'curious', duration: 2300, say: 'bíp bíp?', lookSeq: [{ t: 0, x: -0.8, y: 0 }, { t: 700, x: 0.8, y: 0.05 }, { t: 1500, x: 0, y: -0.4 }] }) },
+  meetFound: { priority: 7, cooldown: 0, build: (n, p) => ({ expression: 'excited', duration: 2000, clip: 'wave', say: p.name ? `Chào ${p.name}!` : 'Chào bạn!', fx: ['hearts'], then: { expression: 'love', duration: 3200 } }) },
+  meetEmo: { priority: 4, cooldown: 0, build: (n, p) => ({ expression: p.emo || 'happy', duration: 2600, lookAt: { x: 0, y: 0 } }) },
+  meetBye: { priority: 6, cooldown: 0, build: (n, p) => ({ expression: 'happy', duration: 2900, clip: 'bye', say: p.name ? `Bai bai ${p.name}!` : 'Bai bai!', then: { expression: 'love', duration: 1500 } }) },
+  meetEnd: { priority: 3, cooldown: 0, build: (n, p) => ({ expression: p.sad ? 'sad' : 'neutral', duration: 2400, say: p.say || '' }) },
   cue: { priority: 1, cooldown: 0, build: (n, p) => ({ expression: p.expression, duration: p.duration || 5000, sound: p.sound, say: p.say }) },
 };
 

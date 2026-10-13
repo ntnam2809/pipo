@@ -1,5 +1,8 @@
 // Body: sinh "tư thế" (pose) cho thân/đầu/tay từ biểu cảm + điệu nhảy, bằng lò xo. Thuần logic: không đụng DOM.
-// pose = { bob, sway, tilt, squash, hover, armL:{lift,spread,curl}, armR:{...} }
+// pose = { bob, sway, tilt, squash, hover, armL:{lift,spread,curl}, armR:{...}, handL, handR }
+//   handL/handR: tay "động tác" trong không gian tay (xem handclips.js) { x, y, rot, shape, scale, alpha } hoặc null khi đã ẩn hẳn.
+//   fall: tư thế gục ngã (eyes/fall.js) { w, tilt, drop, sway, squash, shake, limp } hoặc null — vượt giới hạn tilt thường (tới ~1.45 rad); skin vẽ nằm ngang.
+//   classic/pixel vẽ găng theo handL/handR; Eve không vẽ găng mà ghi đè armL/armR (thêm shape/sc/reach/front) bằng ánh xạ vị trí tay -> lift/spread/curl.
 //   bob/sway/hover: phần của U (bob dương = hạ xuống); tilt: radian (dương = nghiêng sang phải màn hình);
 //   squash: ~ ±0.15 (dương = ép dẹt); tay: lift -1 (rủ) .. +1 (giơ thẳng lên), spread -1 (khép/chéo vào) .. +1 (dang ra), curl -1..1 (cuộn đầu tay vào trong).
 // Mọi skin áp bob/sway/tilt/squash lên khuôn mặt; chỉ skin có tay (eve) mới dùng arm*.
@@ -49,16 +52,43 @@ const BODY_EXPR = {
   eating: { bounce: [3.4, 0.01] }, drinking: { bounce: [3.2, 0.008] }, blush: { tilt: 0.06, sway: [1.4, 0.008] }, glitch: { shake: [60, 0.012] },
 };
 
+// ---- tay động tác (clip) ----
+const HAND_KEYS = ['x', 'y', 'rot', 'scale', 'alpha'];
+const HAND_LIMITS = { x: [-3, 3], y: [-3, 3], rot: [-3.2, 3.2], scale: [0.3, 3.2], alpha: [0, 1] };
+const mkHand = (side) => ({ sp: { x: new Spring(side * 1.7, 900, 0.78), y: new Spring(1.1, 900, 0.78), rot: new Spring(0, 900, 0.78), scale: new Spring(1, 800, 0.55), alpha: new Spring(0, 1600, 1) }, shape: 'open', has: false });
+
+/** Mô hình thân Eve theo đơn vị F (nửa rộng đầu): vai, chiều dài tay. Dùng để đổi vị trí tay mục tiêu -> lift/spread/curl. */
+export const EVE_ARM = { shoulderX: 0.91, shoulderY: 1.34, len: 1.03 };
+const EVE_Y_BIAS = -0.14;   // đầu Eve cao hơn khuôn mặt classic/pixel: cùng clip, tay Eve nhắm cao hơn một chút
+const SHAPE_CURL = { open: 0.12, flat: 0.0, fist: 0.3, point: 0.26, thumb: 0.3, gun: 0.3 };
+
+/**
+ * Tay mục tiêu (không gian tay) -> tư thế tay Eve. side = -1 (trái màn hình) | +1 (phải).
+ * Hướng cánh tay theo góc từ vai tới tay; rot của tay lắc cánh tay quanh vai; tay quá xa thì cánh tay duỗi dài và gập khuỷu về phía đích.
+ */
+export function handToArm(hd, side) {
+  const out = side * hd.x - EVE_ARM.shoulderX, up = EVE_ARM.shoulderY - (hd.y + EVE_Y_BIAS), d = Math.hypot(out, up);
+  const ar = Math.abs(hd.rot), swing = clamp(hd.rot, -0.5, 0.5) * (1 - clamp((ar - 0.6) / 0.4, 0, 1));   // lắc cổ tay -> lắc cánh tay; tay xoay hẳn (chào, đưa trán) thì không kéo cánh tay theo
+  const phi = Math.atan2(out, -up) - 0.85 * swing * side;      // 0 = thẳng xuống, π = thẳng lên, nhỏ hơn π = chếch ra ngoài
+  const lift = -Math.cos(phi), sideOut = Math.max(-0.62, Math.sin(phi)), spread = (sideOut - 0.3) / 0.95;
+  const bend = clamp(-out * 2.2, 0, 1) * 0.85 + clamp((d - EVE_ARM.len * 1.6) / 1.2, 0, 1) * 0.3;   // đích nằm phía trong vai thì gập khuỷu vào trong
+  const curl = Math.cos(phi) * ((SHAPE_CURL[hd.shape] ?? 0.1) + bend);   // dấu cos: tay hướng lên thì gập vào trong là curl âm
+  return { lift, spread, curl, shape: hd.shape, sc: hd.scale, reach: clamp(d / EVE_ARM.len, 0.62, 1.55), front: hd.scale > 1.35 };
+}
+
+const LIMP_ARM = { lift: -0.62, spread: 0.42, curl: 0.5 };
+const mkFall = () => ({ tilt: new Spring(0, 300, 0.5), drop: new Spring(0, 260, 0.5), sway: new Spring(0, 240, 0.6), squash: new Spring(0, 320, 0.45), w: new Spring(0, 520, 1), limp: new Spring(0, 160, 0.8), shake: 0 });
 const mkArm = () => ({ lift: new Spring(-1, 150, 0.62), spread: new Spring(0, 150, 0.62), curl: new Spring(0, 150, 0.7) });
 
 export class Body {
   constructor() {
     this.sp = { bob: new Spring(0, 260, 0.55), sway: new Spring(0, 220, 0.6), tilt: new Spring(0, 200, 0.62), squash: new Spring(0, 320, 0.5), hover: new Spring(0, 40, 0.8) };
     this.armL = mkArm(); this.armR = mkArm(); this.mix = new Spring(0, 40, 1);
+    this.handL = mkHand(-1); this.handR = mkHand(1); this.fl = mkFall();
     this.t = 0;
   }
 
-  /** dt giây; ctx = { expression, dance, t }. Trả pose (số hữu hạn, trong khoảng). */
+  /** dt giây; ctx = { expression, dance, t, clip, fall }. fall = pose của FallDirector (hoặc null). clip = mẫu clip hiện tại { L, R } (handclips.sampleClip) hoặc null. Trả pose (số hữu hạn, trong khoảng). */
   update(dtIn, ctx = {}) {
     const dt = clamp(Number(dtIn) || 0, 0.0005, 0.05);
     this.t += dt; const t = Number.isFinite(ctx.t) ? ctx.t : this.t;
@@ -99,6 +129,34 @@ export class Body {
       aL = mixArm(aL, dL); aR = mixArm(aR, dR);
     }
 
+    // ---- tay động tác: lò xo bám clip; không clip thì giữ chỗ cũ và mờ dần ----
+    const clip = ctx.clip && typeof ctx.clip === 'object' ? ctx.clip : null, hands = {}, wts = {};
+    for (const [key, side, st] of [['L', -1, this.handL], ['R', 1, this.handR]]) {
+      const src = clip && clip[key];
+      if (src) for (const k of HAND_KEYS) { const v = Number.isFinite(src[k]) ? src[k] : st.sp[k].x; st.sp[k].update(clamp(v, HAND_LIMITS[k][0], HAND_LIMITS[k][1]), dt); }
+      else { for (const k of ['x', 'y', 'rot', 'scale']) st.sp[k].update(st.sp[k].x, dt); st.sp.alpha.update(0, dt, 700, 1); }
+      if (src && SHAPES_OK.has(src.shape)) st.shape = src.shape;
+      const al = clamp(st.sp.alpha.x, 0, 1);
+      hands[key] = al > 0.012 ? { x: clamp(st.sp.x.x, -3, 3), y: clamp(st.sp.y.x, -3, 3), rot: clamp(st.sp.rot.x, -3.2, 3.2), shape: st.shape, scale: clamp(st.sp.scale.x, 0.3, 3.2), alpha: al } : null;
+      wts[key] = al * al * (3 - 2 * al);
+    }
+    const wmax = Math.max(wts.L, wts.R);
+    if (wts.L > 0.004) aL = overrideArm(aL, hands.L || { ...handNow(this.handL), alpha: 0 }, -1, wts.L);
+    if (wts.R > 0.004) aR = overrideArm(aR, hands.R || { ...handNow(this.handR), alpha: 0 }, 1, wts.R);
+    // clip chỉ dùng một tay: tay kia thả lỏng thay vì giữ tư thế biểu cảm (giơ ngang khi vui...)
+    if (wts.R > 0.004 && wts.L <= 0.004) aL = relaxArm(aL, wts.R); else if (wts.L > 0.004 && wts.R <= 0.004) aR = relaxArm(aR, wts.L);
+
+    // ---- gục ngã: lò xo mềm (đáp xuống nảy nhẹ), tay rũ ----
+    const fi = ctx.fall && typeof ctx.fall === 'object' ? ctx.fall : null, F = this.fl;
+    const fz = (k) => (fi && Number.isFinite(fi[k]) ? fi[k] : 0);
+    F.tilt.update(clamp(fz('tilt'), -1.7, 1.7), dt); F.drop.update(clamp(fz('drop'), -0.3, 0.5), dt); F.sway.update(clamp(fz('sway'), -0.5, 0.5), dt);
+    F.squash.update(clamp(fz('squash'), -0.3, 0.4), dt); F.w.update(clamp(fz('w'), 0, 1), dt); F.limp.update(clamp(fz('limp'), 0, 1), dt); F.shake = clamp(fz('shake'), 0, 1);
+    if (F.limp.x > 0.01) {
+      const k = clamp(F.limp.x, 0, 1), tw = F.shake * 0.35 * Math.sin(this.t * 40);
+      aL = { lift: lerp(aL.lift, LIMP_ARM.lift + tw, k), spread: lerp(aL.spread, LIMP_ARM.spread, k), curl: lerp(aL.curl, LIMP_ARM.curl, k) };
+      aR = { lift: lerp(aR.lift, LIMP_ARM.lift - tw, k), spread: lerp(aR.spread, LIMP_ARM.spread, k), curl: lerp(aR.curl, LIMP_ARM.curl, k) };
+    }
+
     // ---- lò xo (khi nhảy cứng hơn để bám nhịp) ----
     const hard = mix > 0.3, kb = hard ? 700 : 260, kz = hard ? 0.72 : 0.55;
     const S = this.sp;
@@ -106,15 +164,25 @@ export class Body {
       bob: S.bob.update(bob, dt, kb, kz), sway: S.sway.update(sway, dt, hard ? 520 : 220, hard ? 0.7 : 0.6), tilt: S.tilt.update(tilt, dt, hard ? 420 : 200, hard ? 0.7 : 0.62),
       squash: S.squash.update(squash, dt, hard ? 800 : 320, hard ? 0.62 : 0.5), hover: S.hover.update(hover, dt),
     };
-    const ka = hard ? 380 : 150;
-    const armOut = (st, tg) => ({ lift: st.lift.update(tg.lift, dt, ka, 0.62), spread: st.spread.update(tg.spread, dt, ka, 0.62), curl: st.curl.update(tg.curl, dt, ka, 0.7) });
+    const ka = Math.max(hard ? 380 : 150, 150 + 420 * wmax);   // có clip: tay bám nhanh để vẫy/đấm kịp nhịp
+    const armOut = (st, tg) => ({ lift: st.lift.update(tg.lift, dt, ka, 0.62), spread: st.spread.update(tg.spread, dt, ka, 0.62), curl: st.curl.update(tg.curl, dt, ka, 0.7), ex: tg.ex });
     const L = armOut(this.armL, aL), R = armOut(this.armR, aR);
     const lim = (k, v) => (Number.isFinite(v) ? clamp(v, LIMITS[k][0], LIMITS[k][1]) : 0);
-    const fixArm = (a) => ({ lift: lim('lift', a.lift), spread: lim('spread', a.spread), curl: lim('curl', a.curl) });
-    return { bob: lim('bob', out.bob), sway: lim('sway', out.sway), tilt: lim('tilt', out.tilt), squash: lim('squash', out.squash), hover: lim('hover', out.hover), armL: fixArm(L), armR: fixArm(R) };
+    const fixArm = (a) => { const o = { lift: lim('lift', a.lift), spread: lim('spread', a.spread), curl: lim('curl', a.curl) }; if (a.ex) Object.assign(o, a.ex); return o; };
+    return { bob: lim('bob', out.bob), sway: lim('sway', out.sway), tilt: lim('tilt', out.tilt), squash: lim('squash', out.squash), hover: lim('hover', out.hover), armL: fixArm(L), armR: fixArm(R), handL: hands.L, handR: hands.R, fall: F.w.x > 0.01 ? { w: clamp(F.w.x, 0, 1), tilt: clamp(F.tilt.x, -1.7, 1.7), drop: clamp(F.drop.x, -0.3, 0.5), sway: clamp(F.sway.x, -0.5, 0.5), squash: clamp(F.squash.x, -0.3, 0.4), shake: F.shake, limp: clamp(F.limp.x, 0, 1) } : null };
   }
 }
 
+const SHAPES_OK = new Set(['open', 'fist', 'point', 'thumb', 'flat', 'gun']);
+const handNow = (st) => ({ x: st.sp.x.x, y: st.sp.y.x, rot: st.sp.rot.x, shape: st.shape, scale: st.sp.scale.x });
+/** Trộn tư thế tay theo biểu cảm với tư thế đích của clip (trọng số w); ghi thêm shape/sc/reach/front cho skin có tay. */
+const RELAX = { lift: -0.9, spread: 0.08, curl: 0.12 };
+function relaxArm(cur, w) { const k = 0.85 * w; return { lift: lerp(cur.lift, RELAX.lift, k), spread: lerp(cur.spread, RELAX.spread, k), curl: lerp(cur.curl, RELAX.curl, k) }; }
+function overrideArm(cur, hd, side, w) {
+  const m = handToArm(hd, side), mix = (a, b) => lerp(a, b, w);
+  return { lift: mix(cur.lift, m.lift), spread: mix(cur.spread, m.spread), curl: mix(cur.curl, m.curl), ex: { shape: m.shape, sc: lerp(1, m.sc, w), reach: lerp(1, m.reach, w), front: m.front && w > 0.3, w } };
+}
+
 export function restPose() {
-  return { bob: 0, sway: 0, tilt: 0, squash: 0, hover: 0, armL: { lift: -1, spread: 0, curl: 0 }, armR: { lift: -1, spread: 0, curl: 0 } };
+  return { bob: 0, sway: 0, tilt: 0, squash: 0, hover: 0, armL: { lift: -1, spread: 0, curl: 0 }, armR: { lift: -1, spread: 0, curl: 0 }, handL: null, handR: null, fall: null };
 }

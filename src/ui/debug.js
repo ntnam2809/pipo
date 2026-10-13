@@ -3,6 +3,7 @@ import { h } from './dom.js';
 import { EXPRESSION_IDS } from '../eyes/expressions.js';
 import { FOODS, DRINKS } from '../brain/rules.js';
 import { SKINS } from '../skins/index.js';
+import { CLIP_NAMES } from '../eyes/handclips.js';
 
 const EVENTS = [
   ['Lắc', 'motion:shake'], ['Lắc mạnh', 'motion:hardshake'], ['Rơi', 'motion:freefall'], ['Chạm đất', 'motion:impact'], ['Úp mặt', 'motion:facedown'], ['Ngửa lại', 'motion:faceup'],
@@ -12,9 +13,14 @@ const EVENTS = [
   ['Vỗ tay', 'mic:clap'], ['Vỗ 2 lần', 'mic:clap2'], ['Tiếng to', 'mic:loud'], ['Pin yếu', 'battery:low', { level: 0.15 }], ['Cắm sạc', 'battery:charging', { charging: true }],
   ['Chỗ mới', 'geo:newplace'], ['Về nhà', 'geo:home'], ['Chọc', 'touch:poke'], ['Nựng', 'touch:pet', { count: 3 }], ['Ôm', 'touch:hug'], ['Gọi tên', 'voice:name'], ['Ngủ đi', 'voice:cmd', { cmd: 'sleep' }], ['Dậy đi', 'voice:cmd', { cmd: 'wake' }],
   ['Nhảy đi', 'voice:cmd', { cmd: 'dance' }],
+  ['Giả lập chĩa súng', 'hand:aim'], ['Giả lập bắn', 'hand:fire'], ['Hạ súng', 'hand:lower'], ['Pằng!', 'voice:cmd', { cmd: 'shot' }],
+  ['Người vẫy tay', 'hand:wave'], ['Người đưa nắm đấm', 'hand:fistbump'], ['Người giơ ngón cái', 'hand:thumbsup'], ['Người giơ tay mở', 'hand:highfive'],
 ];
 
-export function createDebug({ bus, force, needs, animator, getSkin, setSkin, toggleMusic }) {
+export function createDebug({ bus, force, needs, animator, getSkin, setSkin, toggleMusic, gesture, stopGesture, simMeet }) {
+  const meetBtn = h('button', { id: 'dbg-meet', onclick: () => simMeet && simMeet() }, 'Giả lập bạn Pipo');
+  const gSel = h('select', { id: 'dbg-gesture' }, CLIP_NAMES.map((id) => h('option', { value: id, text: id })));
+  const gGo = h('button', { id: 'dbg-gesture-go', onclick: () => gesture && gesture(gSel.value) }, 'Làm'), gStop = h('button', { id: 'dbg-gesture-stop', onclick: () => stopGesture && stopGesture() }, 'Dừng');
   const sel = h('select', { id: 'dbg-expr' }, EXPRESSION_IDS.map((id) => h('option', { value: id, text: id })));
   sel.addEventListener('change', () => force(sel.value));
   const skinSel = h('select', { id: 'dbg-skin' }, SKINS.map((s) => h('option', { value: s.id, text: s.label })));
@@ -27,7 +33,7 @@ export function createDebug({ bus, force, needs, animator, getSkin, setSkin, tog
   const amp = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0 }); amp.addEventListener('input', () => animator.setVoiceAmp(Number(amp.value)));
   const evBtns = EVENTS.map(([l, n, p]) => h('button', { onclick: () => bus.emit(n, p || {}) }, l));
   const feedBtns = [...Object.keys(FOODS).map((k) => h('button', { onclick: () => bus.emit('feed:drop', { kind: 'food', item: k }) }, FOODS[k].emoji)), ...Object.keys(DRINKS).map((k) => h('button', { onclick: () => bus.emit('feed:drop', { kind: 'drink', item: k }) }, DRINKS[k].emoji))];
-  const body = h('div', { class: 'dbody' }, h('div', {}, 'Biểu cảm ', sel), h('div', {}, 'Giao diện ', skinSel), ...sliders, h('label', { class: 'dl' }, 'nhép miệng', amp), h('div', { class: 'dbtns' }, musicBtn, evBtns, feedBtns));
+  const body = h('div', { class: 'dbody' }, h('div', {}, 'Biểu cảm ', sel), h('div', {}, 'Giao diện ', skinSel), h('div', {}, 'Động tác ', gSel, gGo, gStop), h('div', {}, meetBtn), ...sliders, h('label', { class: 'dl' }, 'nhép miệng', amp), h('div', { class: 'dbtns' }, musicBtn, evBtns, feedBtns));
   const tg = h('button', { class: 'dtog', text: 'debug', onclick: () => { body.hidden = !body.hidden; } });
   return h('div', { class: 'debug', id: 'debug' }, tg, body);
 }

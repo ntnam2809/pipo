@@ -13,7 +13,7 @@ test('validator: JSON hợp lệ qua, có clamp', () => {
   assert.equal(validateLLM({ expression: 'sad', duration_ms: 10 }).intent.duration, 500);
 });
 test('validator: chặn JSON hỏng / id lạ / số bậy -> fallback', () => {
-  for (const bad of ['', 'không phải json', '{"expression":', '[1,2]', null, undefined, 42, '{}', '{"expression":"sieu_nhan"}', '{"sound":"pew","action":"fly"}']) assert.equal(validateLLM(bad).ok, false, String(bad));
+  for (const bad of ['', 'không phải json', '{"expression":', '[1,2]', null, undefined, 42, '{}', '{"expression":"sieu_nhan"}', '{"sound":"pewpew","action":"fly"}']) assert.equal(validateLLM(bad).ok, false, String(bad));
   const part = validateLLM('{"expression":"lạ","say":"bíp","intensity":"abc"}'); assert.ok(part.ok && !part.intent.expression && part.intent.say === 'bíp' && part.issues.length >= 2);
   assert.equal(validateLLM('{"expression":"happy","action":"none"}').intent.action, undefined);
 });

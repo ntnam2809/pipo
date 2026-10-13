@@ -1,5 +1,6 @@
 // Skin pixel: ma trận LED. Mặt (mắt + miệng + fx, không glow) dựng vào canvas offscreen độ phân giải thấp (ô vuông),
 // đọc lại bằng getImageData rồi vẽ từng ô thành chấm LED bo tròn: sáng theo độ sáng mẫu, màu theo theme; ô tắt vẫn hiện mờ (lưới "ma").
+import { drawHands } from '../eyes/hands.js';
 const COLS_FACE = 34;                      // số ô ngang ứng với một đơn vị U (khổ mặt)
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -37,12 +38,13 @@ export default {
     lx.setTransform(1 / cell, 0, 0, 1 / cell, -ox / cell, -oy / cell);
     lx.save();
     if (frame.roll) { lx.translate(g.cx, g.cy); lx.rotate(frame.roll); lx.translate(-g.cx, -g.cy); }
-    r.applyPose(lx, g, pose);
+    r.applyPose(lx, g, pose); r.applyFall(lx, g, pose && pose.fall);
     const ls = r.lineScale; r.lineScale = 1.9;       // nét miệng mảnh phải dày cỡ một ô mới thấy
     // miệng nhỏ phải rộng ~5 ô mới đọc được nụ cười trên lưới thấp
     const gp = { ...g, mouth: { ...g.mouth, base: g.mouth.base * 1.5 } };
     r.drawFace(lx, frame, fx, gp, { glow: false });
     r.lineScale = ls;
+    drawHands(r, lx, gp, pose, { flat: true, toCss: (x, y) => ({ x: ox + x * cell, y: oy + y * cell }) });   // cùng găng, vẽ phẳng vào buffer LED
     lx.restore();
     // 2) lưới ma + quầng sáng (phóng to mượt canvas thấp, cộng sáng)
     ctx.drawImage(ghost, 0, 0, r.W, r.H);

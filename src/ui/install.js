@@ -30,7 +30,7 @@ export async function promptInstall() {
 }
 
 /** Mục "Ứng dụng" trong Cài đặt + nút gợi ý nhỏ góc trái; tự toàn màn hình ở cú chạm kế tiếp nếu bật. */
-export function createInstall({ store, onManual }) {
+export function createInstall({ store, onManual, onInstall }) {
   const S = () => store.data.settings;
   const status = h('span', {});
   const installBtn = h('button', { class: 'btn', text: '📲 Cài Pipo như ứng dụng', onclick: () => install() });
@@ -47,6 +47,7 @@ export function createInstall({ store, onManual }) {
 
   async function install() {
     const r = await promptInstall();
+    if (onInstall) onInstall(r);
     if (r === 'manual') { help.textContent = howTo(); if (onManual) onManual(); }
     refresh();
   }

@@ -1,0 +1,13 @@
+# Sao chép thành wrangler.toml rồi sửa. Triển khai: xem README.md.
+name = "pipo-telemetry"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Origin (không có đường dẫn, không dấu / cuối) của trang Pipo được phép gửi. Ngăn cách nhiều origin bằng dấu phẩy.
+[vars]
+ALLOWED_ORIGINS = "https://ntnam2809.github.io"
+
+# Workers Analytics Engine: biến PIPO trong worker.js, tên dataset dùng trong truy vấn SQL.
+[[analytics_engine_datasets]]
+binding = "PIPO"
+dataset = "pipo_telemetry"

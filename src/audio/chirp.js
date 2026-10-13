@@ -22,6 +22,7 @@ export const PATTERNS = {
   wake: [N(400, 0.12, 0, { type: 'triangle' }), N(560, 0.12, 0.16, { type: 'triangle' }), N(840, 0.2, 0.32, { type: 'triangle' })],
   sleep: [N(500, 0.25, 0, { type: 'sine', v: 0.3 }), N(400, 0.25, 0.3, { type: 'sine', v: 0.25 }), N(300, 0.4, 0.6, { type: 'sine', v: 0.2 })],
   cold: Array.from({ length: 10 }, (_, i) => N(800, 0.04, i * 0.07, { type: 'square', v: 0.3 })),
+  salute: [N(660, 0.07, 0, { type: 'square', v: 0.5 }), N(990, 0.14, 0.1, { type: 'square', v: 0.5 })],   // hai nốt dứt khoát
   gulp: [N(420, 0.13, 0, { to: 160, type: 'sine', v: 0.6 }), N(900, 0.04, 0.14, { to: 1500, type: 'sine', v: 0.25 }), N(420, 0.13, 0.4, { to: 160, type: 'sine', v: 0.6 }), N(900, 0.04, 0.54, { to: 1500, type: 'sine', v: 0.25 })],
 };
 
@@ -45,6 +46,17 @@ export class Chirp {
       if (this.ctx.state !== 'running') this.ctx.resume();
       this.unlocked = true; return true;
     } catch { return false; }
+  }
+  get sampleRate() { return this.ctx ? this.ctx.sampleRate : 48000; }
+  /** Phát PCM float (tiếng bíp của modem) qua master: nhép miệng theo level(), qua bộ nén như mọi tiếng khác. Trả thời lượng (s), 0 nếu chưa mở/tắt tiếng. */
+  pcm(samples, gain = 1.5) {
+    if (!this.enabled || !this.unlocked || !this.ctx || !samples || !samples.length) return 0;
+    try {
+      const c = this.ctx; if (c.state === 'suspended') c.resume();
+      const b = c.createBuffer(1, samples.length, c.sampleRate); b.getChannelData(0).set(samples);
+      const s = c.createBufferSource(), g = c.createGain(); s.buffer = b; g.gain.value = gain; s.connect(g); g.connect(this.master); s.start(c.currentTime + 0.02);
+      return samples.length / c.sampleRate;
+    } catch { return 0; }
   }
   /** Biên độ RMS hiện tại 0..1 (cho nhép miệng). */
   level() {
@@ -70,9 +82,21 @@ export class Chirp {
       const t0 = this.ctx.currentTime + 0.01;
       if (id === 'purr') { this._purr(t0); return true; }
       if (id === 'chew') { for (let i = 0; i < 6; i++) this.click(t0 + i * 0.145, 1400 + (i % 2) * 500); return true; }
+      if (id === 'pow') { this.click(t0, 500); this.click(t0 + 0.012, 1100); this.tone({ f: 260, to: 55, d: 0.2, type: 'sine', v: 1 }, t0); this.tone({ f: 140, to: 50, d: 0.16, type: 'square', v: 0.35 }, t0); return true; }
+      if (id === 'slap') { this.click(t0, 2600); this.click(t0 + 0.008, 1700); this.tone({ f: 1100, to: 380, d: 0.06, type: 'square', v: 0.3 }, t0); return true; }
+      if (id === 'pew') { this.click(t0, 3200); this.tone({ f: 2800, to: 420, d: 0.16, type: 'square', v: 0.38 }, t0); this.tone({ f: 1400, to: 300, d: 0.2, type: 'triangle', v: 0.4 }, t0 + 0.02); return true; }
+      if (id === 'thud') { this.click(t0, 260); this.tone({ f: 130, to: 42, d: 0.24, type: 'sine', v: 1 }, t0); return true; }
+      if (id === 'whoosh') { this._whoosh(t0); return true; }
       if (id === 'glitch') { for (let i = 0; i < 6; i++) { this.click(t0 + i * 0.04, 800 + Math.random() * 3000); this.tone({ f: 200 + Math.random() * 1800, d: 0.04, at: i * 0.045, type: 'square', v: 0.4 }, t0); } return true; }
       const p = PATTERNS[id] || PATTERNS.beep; for (const n of p) this.tone(n, t0); return true;
     } catch { return false; }
+  }
+  /** Vút: nhiễu qua bộ lọc băng thông quét từ trầm lên cao rồi tắt nhanh. */
+  _whoosh(t0) {
+    const c = this.ctx, s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain(); s.buffer = this.noise; s.loop = true; bp.type = 'bandpass'; bp.Q.value = 1.4;
+    bp.frequency.setValueAtTime(380, t0); bp.frequency.exponentialRampToValueAtTime(2800, t0 + 0.26);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.55, t0 + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+    s.connect(bp); bp.connect(g); g.connect(this.master); s.start(t0); s.stop(t0 + 0.32);
   }
   _purr(t0) {
     const c = this.ctx, o = c.createOscillator(), m = c.createOscillator(), mg = c.createGain(), g = c.createGain(), lf = c.createOscillator(), lg = c.createGain(), lp = c.createBiquadFilter();

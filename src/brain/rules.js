@@ -2,7 +2,10 @@
 import { Needs, circadian } from './needs.js';
 import { Mood, pickBase, needCue } from './mood.js';
 import { Reactions } from './reactions.js';
+import { FallDirector } from '../eyes/fall.js';
 
+export const SHOT_WINDOW_MS = 30000, SHOT_DEBOUNCE_MS = 800;   // habituation bắn: lần 3 trong 30 s thì né, lần 4 thì bắn trả
+export const FACE_AWAY_MS = 10 * 60 * 1000;   // vắng mặt người ≥ 10 phút rồi thấy lại thì vẫy chào
 export const FOODS = {
   cookie: { emoji: '🍪', label: 'Bánh quy', hunger: 0.25, fun: 0.1 },
   battery: { emoji: '🔋', label: 'Pin', hunger: 0.2, energy: 0.15 },
@@ -22,12 +25,15 @@ const LINES = {
   hot: ['Nóng quá!'], cold: ['Lạnh run...'], sleepy: ['Buồn ngủ...'], cool: ['Ngầu chưa?'],
   hello: ['Chào bạn!', 'Bíp bíp!'],
 };
+/** Lệnh/động tác -> phản xạ tay (voice:cmd, khay ✋, LLM action). */
+export const GESTURE_REACTIONS = { wave: 'gWave', bye: 'gBye', salute: 'gSalute', punch: 'gPunch', combo: 'gCombo', highfive: 'gHighfive', fistbump: 'gFistbump', thumbsup: 'gThumbsup', clap: 'gClap', point: 'gPoint', peekaboo: 'gPeekaboo' };
 const pick = (arr, rng) => arr[Math.floor(rng() * arr.length) % arr.length];
 
 export class RuleBrain {
   constructor({ needs, mood, reactions, rng = Math.random } = {}) {
     this.needs = needs || new Needs(); this.mood = mood || new Mood(); this.reactions = reactions || new Reactions(); this.rng = rng;
-    this.asleep = false; this.lastTouch = 0; this.lastCue = {}; this.facePresent = false;
+    this.asleep = false; this.lastTouch = 0; this.lastCue = {}; this.facePresent = false; this.lastFaceAt = -Infinity;
+    this.fall = new FallDirector(rng); this.shots = []; this.lastShot = -1e9; this.pending = [];   // pending: hiệu ứng chờ main xử lý ({sound, shake})
     this.world = { hour: 12, weather: null, dark: false, charging: false, battery: 1 };
   }
   setWorld(p) { Object.assign(this.world, p); }
@@ -43,7 +49,23 @@ export class RuleBrain {
     if (this.asleep && touchy && !(ev === 'voice:cmd' && p.cmd === 'sleep')) {
       this.asleep = false; R.cancel('facedown'); return this._fire('wake', {}, now);
     }
+    if (ev.startsWith('touch:') && this.fall.active && this.fall.state !== 'dodge' && this.fall.state !== 'rise') {   // đang giả chết: chạm/nựng = cứu dậy
+      if (this.fall.touch()) { N.add('affection', 0.05); M.bump(0.15, 0.2); return this._fire('reviveTouch', p, now); }
+      return null;
+    }
     switch (ev) {
+      case 'meet:search': return this._fire('meetSearch', p, now);
+      case 'meet:found': N.add('fun', 0.15); N.add('affection', 0.08); M.bump(0.3, 0.3); return this._fire('meetFound', p, now);
+      case 'meet:emo': return this._fire('meetEmo', p, now);
+      case 'meet:bye': N.add('fun', 0.05); return this._fire('meetBye', p, now);
+      case 'meet:end': return this._fire('meetEnd', p, now);
+      case 'hand:aim': return this.aim(now);
+      case 'hand:lower': R.cancel('aim'); return null;
+      case 'hand:fire': return this.shot(now);
+      case 'hand:wave': return this.mirror('wave', now);
+      case 'hand:fistbump': return this.mirror('fistbump', now);
+      case 'hand:thumbsup': return this.mirror('thumbsup', now);
+      case 'hand:highfive': return this.mirror('highfive', now);
       case 'touch:poke': M.bump(-0.05, 0.1); return this._fire('poke', p, now);
       case 'touch:tap': return this._fire('tapAway', p, now);
       case 'touch:pet': R.forget('poke'); N.add('affection', 0.04); N.add('fun', 0.01); M.bump(0.12, 0.05); return this._fire('pet', p, now) || R.cur;
@@ -62,7 +84,12 @@ export class RuleBrain {
       case 'geo:home': return this._fire('home', p, now);
       case 'weather:update': this.world.weather = p; return null;
       case 'camera:face':
-        if (p.present && !this.facePresent) { this.facePresent = true; N.add('affection', 0.05); const it = this._fire('faceHi', p, now); if (it) return it; }
+        if (p.present && !this.facePresent) {
+          const away = now - this.lastFaceAt; this.facePresent = true; this.lastFaceAt = now; N.add('affection', 0.05);
+          if (away >= FACE_AWAY_MS) { M.bump(0.2, 0.2); const w = this._fire('gWave', {}, now); if (w) return w; }   // lâu mới thấy lại: vẫy chào
+          const it = this._fire('faceHi', p, now); if (it) return it;
+        }
+        if (p.present) this.lastFaceAt = now;
         if (!p.present) this.facePresent = false;
         if (p.present && p.size > 0.4) return this._fire('faceNear', p, now);
         return null;
@@ -79,6 +106,9 @@ export class RuleBrain {
       case 'voice:name': return this._fire('nameCall', p, now);
       case 'voice:cmd': return this.command(p.cmd, now);
       case 'idle:bored': return this._fire('bored', p, now);
+      case 'touch:highfive': N.add('affection', 0.06); N.add('fun', 0.05); M.bump(0.3, 0.2); return this._fire('highfiveOk', p, now);
+      case 'hand:highfiveMiss': M.bump(-0.08, -0.05); return this._fire('highfiveMiss', p, now);
+      case 'greet:morning': M.bump(0.2, 0.2); return this._fire('gWave', { say: 'Chào buổi sáng!' }, now);
       default: return null;
     }
   }
@@ -92,8 +122,38 @@ export class RuleBrain {
       case 'look': return this._fire('nameCall', {}, now);
       case 'dance': return this._fire('dance', {}, now);
       case 'angry': return this._fire('cue', { expression: 'angry', duration: 2500, sound: 'angry', say: 'Hứ!' }, now);
-      default: return null;
+      case 'shot': return this.shot(now);
+      default: return this.gesture(cmd, now);
     }
+  }
+
+  /** Một động tác tay theo tên (wave · bye · salute · punch · combo · highfive · fistbump · thumbsup · clap · point · peekaboo). */
+  gesture(name, now, p = {}) {
+    const r = GESTURE_REACTIONS[name]; if (!r) return null;
+    if (name === 'thumbsup') { this.needs.add('affection', 0.03); this.mood.bump(0.15, 0.05); }
+    if (name === 'clap' || name === 'fistbump') this.mood.bump(0.08, 0.1);
+    this.asleep = false; return this._fire(r, p, now);
+  }
+
+  /** Bị chĩa súng (tay người dạng súng giữ ≥ 0,4 s): hoảng, giơ tay đầu hàng. Không đè lên lúc đang nằm/né. */
+  aim(now) {
+    if (this.asleep || this.fall.active) return null;
+    this.mood.bump(-0.1, 0.3); return this._fire('aim', {}, now);
+  }
+  /** Trúng đạn. Lần 1–2 (trong 30 s) gục giả chết; lần 3 né; lần 4 bắn trả rồi tính lại. Nhiều phát dồn trong 0,8 s chỉ tính một. */
+  shot(now) {
+    if (this.asleep || now - this.lastShot < SHOT_DEBOUNCE_MS) return null;
+    this.lastShot = now; this.shots = this.shots.filter((t) => now - t < SHOT_WINDOW_MS); this.shots.push(now);
+    const n = this.shots.length, R = this.reactions; R.cancel('aim');
+    if (this.fall.lying) { this.fall.hit(this.fall.dir); return this._fire('shotHit', {}, now); }   // đang nằm mà bị bắn tiếp: giật thêm cú nữa
+    if (n === 3) { this.fall.dodge(); this.mood.bump(0.15, 0.3); return this._fire('dodge', {}, now); }
+    if (n >= 4) { this.shots = []; this.mood.bump(0.1, 0.4); return this._fire('counter', {}, now); }
+    this.mood.bump(-0.2, 0.4); this.fall.hit(); return this._fire('shotHit', {}, now);
+  }
+  /** Bắt chước tay người (vẫy · cụng · ngón cái · đập tay): Pipo làm lại động tác tương ứng. */
+  mirror(name, now) {
+    if (this.asleep || this.fall.active) return null;
+    this.needs.add('fun', 0.01); return this.gesture(name, now);
   }
 
   /** Thả đồ ăn/uống lên mắt. */
@@ -111,7 +171,7 @@ export class RuleBrain {
   /** Gọi ~2 lần/giây: ý nghĩ tự phát (chán, thời tiết, kính râm, đêm). */
   idle(now) {
     const w = this.world, since = (now - this.lastTouch) / 1000, cue = (k, every) => { if ((now - (this.lastCue[k] ?? -1e9)) / 1000 >= every) { this.lastCue[k] = now; return true; } return false; };
-    if (this.asleep) return null;
+    if (this.asleep || this.fall.active) return null;
     const night = circadian(w.hour);
     if (since > 120 && this.needs.get('energy') < 0.3 + night * 0.3 && cue('nap', 60)) { this.asleep = true; return this._fire('facedown', {}, now); }
     if (since > 120 && cue('bored', 90)) return this._fire('bored', {}, now);
@@ -139,6 +199,9 @@ export class RuleBrain {
   }
 
   tick(dtSec, now, sleeping = false) {
+    const fe = this.fall.update(dtSec);
+    if (fe === 'selfrise') this._fire('reviveSelf', {}, now);
+    else if (fe === 'lie') this.pending.push({ sound: 'thud', shake: 0.7 });
     this.needs.tick(dtSec, { sleeping: sleeping || this.asleep, hour: this.world.hour });
     this.mood.update(dtSec, this.needs, this.world.hour);
   }

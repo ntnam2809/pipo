@@ -12,11 +12,13 @@ export function defaults() {
     skin: 'classic',
     needs: null,
     lastSeen: 0,
+    lastGreet: '',
     home: null,
     places: [],
+    friends: [],
     settings: {
-      sound: true, vibrate: true, tts: false, kiosk: false, wakeLock: true, mimicPreset: 'chipmunk', autoFullscreen: false, installHintOff: false,
-      sensors: { motion: true, compass: false, geo: false, weather: false, camera: false, mic: false, battery: true, voice: false, mimicFace: false, music: false },
+      sound: true, vibrate: true, tts: false, kiosk: false, wakeLock: true, mimicPreset: 'chipmunk', autoFullscreen: false, installHintOff: false, telemetry: true,
+      sensors: { motion: true, compass: false, geo: false, weather: false, camera: false, mic: false, battery: true, voice: false, mimicFace: false, music: false, hands: false },
       llm: { provider: 'none', baseUrl: '', apiKey: '', model: 'claude-haiku-5-5', monologue: false },
     },
   };
@@ -37,6 +39,8 @@ export function migrate(data) {
   const d = deepMerge(defaults(), isObj(data) ? data : {});
   if (!Array.isArray(d.places)) d.places = [];
   d.places = d.places.slice(-50);
+  if (!Array.isArray(d.friends)) d.friends = [];
+  d.friends = d.friends.filter((f) => f && typeof f.name === 'string').slice(0, 50);
   d.version = VERSION;
   return d;
 }
