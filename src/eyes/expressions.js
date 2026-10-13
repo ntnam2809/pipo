@@ -169,6 +169,11 @@ export const EXPRESSIONS = {
     label: 'Quét', s: { w: 1.25, h: 0.55, radius: 0.5, pupil: 0.3, glow: 0.9 }, fx: ['scan'], colorShift: { hue: 150, mix: 0.45 }, blink: 0.3,
     loop: { period: 1.6, pupilX: 0.75 }, mouth: { shape: 'line', mw: 0.55, curve: 0 },
   }),
+  groove: P({
+    label: 'Đung đưa', s: { shape: 'arc', w: 1.05, h: 0.62, glow: 0.85 }, fx: ['notes'], blink: 0,
+    colorShift: { hue: 300, mix: 0.18 }, mouth: { shape: 'smile', curve: 0.62, open: 0.12, mw: 0.78 },
+    loop: { period: 0.46, y: 0.05, abs: true, open: 0.34, my: 0.06 },
+  }),
   glitch: P({
     label: 'Nhiễu', s: { w: 1.1, h: 0.9, wobble: 1, glow: 1 }, fx: ['glitch'], blink: 0, spring: { all: [2.2, 0.4] },
     loop: { period: 0.06, x: 0.1, mx: 0.2 }, mouth: { shape: 'zigzag', mw: 0.9, curve: 0, open: 0.3, wobble: 1 },
@@ -179,4 +184,4 @@ export const EXPRESSION_IDS = Object.keys(EXPRESSIONS);
 export function getExpression(id) { return EXPRESSIONS[id] || EXPRESSIONS.neutral; }
 export function isExpression(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(EXPRESSIONS, id); }
 
-export const FX_NAMES = ['sparkles', 'hearts', 'blush', 'exclaim', 'sweat', 'tears', 'anger', 'question', 'orbit', 'zzz', 'sleepbubble', 'drop', 'crumbs', 'bubbles', 'coldbreath', 'sunglasses', 'umbrella', 'scan', 'glitch'];
+export const FX_NAMES = ['sparkles', 'hearts', 'blush', 'exclaim', 'sweat', 'tears', 'anger', 'question', 'orbit', 'zzz', 'sleepbubble', 'drop', 'crumbs', 'bubbles', 'coldbreath', 'sunglasses', 'umbrella', 'scan', 'glitch', 'notes'];

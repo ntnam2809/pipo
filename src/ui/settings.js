@@ -1,16 +1,17 @@
 // Bảng cài đặt: tên, màu mắt, kiểu mắt, âm thanh, cảm biến, nhại giọng, LLM, dữ liệu.
 import { h } from './dom.js';
 import { THEMES } from '../eyes/animator.js';
+import { SKINS } from '../skins/index.js';
 import { MIMIC_PRESETS } from '../audio/mimic.js';
 import { PROVIDERS, DEFAULT_MODEL } from '../brain/llm.js';
 
 const STATUS = { unsupported: 'không hỗ trợ', denied: 'bị từ chối', off: 'tắt', on: 'đang bật', error: 'lỗi' };
 const SENSORS = [
   ['motion', 'Nghiêng · lắc · rơi · bước chân'], ['compass', 'La bàn'], ['geo', 'GPS (nhà · chỗ mới)'], ['weather', 'Thời tiết (Open-Meteo)'],
-  ['camera', 'Camera (mặt · ú òa · chuyển động)'], ['mic', 'Micro (tiếng động · vỗ tay)'], ['battery', 'Pin'], ['voice', 'Lệnh giọng nói (vi-VN)'],
+  ['camera', 'Camera (mặt · ú òa · chuyển động)'], ['mic', 'Micro (tiếng động · vỗ tay)'], ['battery', 'Pin'], ['voice', 'Lệnh giọng nói (vi-VN)'], ['music', 'Nghe nhạc & nhảy theo (micro)'],
 ];
 
-export function createSettings({ store, sensors, onChange, onSetHome, onReset, onClose }) {
+export function createSettings({ store, sensors, onChange, onSetHome, onReset, onClose, extra }) {
   const S = () => store.data.settings;
   const row = (label, ctl) => h('label', { class: 'frow' }, h('span', { text: label }), ctl);
   const check = (get, set) => { const i = h('input', { type: 'checkbox' }); i.checked = !!get(); i.addEventListener('change', () => set(i.checked)); return i; };
@@ -34,12 +35,14 @@ export function createSettings({ store, sensors, onChange, onSetHome, onReset, o
     h('div', { class: 'pbody' },
       row('Tên', text(() => store.data.name, (v) => { store.data.name = v || 'Pipo'; store.save(); onChange('name', store.data.name); })),
       h('div', { class: 'frow' }, h('span', { text: 'Màu mắt' }), swatches),
+      row('Giao diện', select(SKINS.map((s) => [s.id, s.label]), () => store.data.skin, (v) => { store.data.skin = v; store.save(); onChange('skin', v); })),
       row('Kiểu mắt', select([['solid', 'Khối đặc (robot)'], ['pupil', 'Có đồng tử']], () => store.data.style, (v) => { store.data.style = v; store.save(); onChange('style', v); })),
       row('Âm thanh', check(() => S().sound, (v) => { S().sound = v; store.save(); onChange('sound', v); })),
       row('Rung', check(() => S().vibrate, (v) => { S().vibrate = v; store.save(); })),
       row('Pipo nói thành tiếng (TTS)', check(() => S().tts, (v) => { S().tts = v; store.save(); })),
       row('Chế độ kiểng (giữ sáng, đêm mờ)', check(() => S().kiosk, (v) => { S().kiosk = v; store.save(); onChange('kiosk', v); })),
       row('Giọng nhại', select(Object.entries(MIMIC_PRESETS).map(([k, p]) => [k, p.label]), () => S().mimicPreset, (v) => { S().mimicPreset = v; store.save(); })),
+      extra || null,
       h('h4', { text: 'Cảm biến' }), ...sensorRows,
       row('Bắt chước nét mặt (tải MediaPipe)', check(() => S().sensors.mimicFace, (v) => { S().sensors.mimicFace = v; store.save(); onChange('mimicFace', v); })),
       h('div', { class: 'frow' }, h('button', { class: 'btn', text: '🏠 Đặt "nhà" tại vị trí này', onclick: async () => { const ok = await onSetHome(); toast(ok ? 'Đã lưu nhà.' : 'Chưa lấy được vị trí.'); } })),

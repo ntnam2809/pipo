@@ -30,23 +30,28 @@ robo-pet/
 │  ├─ eyes/expressions.js   # bảng preset biểu cảm (dữ liệu thuần)
 │  ├─ eyes/animator.js      # blend preset + lớp sống (blink, saccade, breath, look-at)
 │  ├─ eyes/renderer.js      # vẽ Canvas: hình mắt, mí, đồng tử, highlight, glow, parallax
-│  ├─ eyes/fx.js            # hạt & phụ kiện: tim, sao, nước mắt, mồ hôi, Zzz, ?, !, xoắn ốc, má hồng, kính râm, ô
+│  ├─ eyes/fx.js            # hạt & phụ kiện: tim, sao, nước mắt, mồ hôi, Zzz, ?, !, xoắn ốc, má hồng, kính râm, ô, nốt nhạc
+│  ├─ eyes/body.js          # pose thân/đầu/tay (lò xo) từ biểu cảm + điệu nhảy
+│  ├─ skins/                # skin (giao diện): index (registry) · classic · pixel · eve
 │  ├─ brain/needs.js        # đói · khát · năng lượng · thương · vui (0..1), decay theo thời gian thực
 │  ├─ brain/mood.js         # valence/arousal liên tục + chọn biểu cảm nền
 │  ├─ brain/reactions.js    # phản xạ theo sự kiện: priority, duration, cooldown, habituation
 │  ├─ brain/rules.js        # "não" không LLM: luật chọn phản ứng + lời thoại ngắn
 │  ├─ brain/llm.js          # khe LLM tùy chọn: provider adapter + validator JSON
+│  ├─ brain/dance.js        # dance director: chú ý → nhảy → thỏa mãn, bộ động tác
 │  ├─ sensors/motion.js     # DeviceOrientation/Motion: nghiêng, lắc, rơi, úp, lật, bước chân
 │  ├─ sensors/compass.js    # hướng Bắc (webkitCompassHeading / alpha absolute)
 │  ├─ sensors/geo.js        # GPS: nhà, quãng đường, chỗ mới
 │  ├─ sensors/weather.js    # Open-Meteo (không key), cache 30 phút
 │  ├─ sensors/camera.js     # camera trước: độ sáng, chuyển động, khuôn mặt (FaceDetector nếu có)
 │  ├─ sensors/mic.js        # âm lượng, vỗ tay, im lặng
+│  ├─ sensors/music.js      # nghe nhạc ngoài môi trường: phổ → BeatTracker
 │  ├─ sensors/battery.js    # pin yếu / đang sạc
 │  ├─ sensors/clock.js      # giờ trong ngày, lịch ngủ
 │  ├─ audio/chirp.js        # tiếng robot tổng hợp (bíp bụp kiểu R2) theo cảm xúc
 │  ├─ audio/mimic.js        # nhại giọng: thu → pitch-shift + robot hóa → phát lại, mắt nhép theo
 │  ├─ audio/voice.js        # Web Speech: nhận lệnh (tùy chọn) + TTS giọng robot (tùy chọn)
+│  ├─ audio/beat.js         # BeatTracker: onset → tempo → pha (PLL) → nhận diện nhạc
 │  └─ ui/{drawer,feed,settings,onboarding,debug}.js
 ├─ test/*.test.js           # node --test cho logic thuần
 └─ README.md
@@ -215,6 +220,7 @@ Thu tối đa 6 s, phát lại `playbackRate` 1.5–1.8 (chipmunk), cộng ring-
 - Khay ăn/uống: món nằm thành hàng, kéo lên vùng mắt để cho ăn.
 - Onboarding lần đầu: màn đen → mắt mở từ từ → nút "Đánh thức Pipo" (cử chỉ người dùng dùng để xin quyền motion trên iOS và mở audio) → đặt tên pet → chọn màu mắt. Quyền camera, mic, GPS chỉ xin khi người dùng bật tính năng tương ứng.
 - **Chế độ kiểng:** Wake Lock giữ màn hình sáng, ban đêm tự giảm sáng (vẽ mờ đi), hiện giờ bằng mắt (đồng tử chuyển thành chữ số giờ:phút khoảng 3 s) khi chạm đúp.
+- **Cài như app** (`ui/install.js`): manifest `display: fullscreen` + `display_override [fullscreen, standalone]`, icon PNG nhúng data URI (`tools/make_icons.py`). Bắt `beforeinstallprompt` để hiện nút "📲 Cài như app" (góc trái, ẩn được) và nút trong Cài đặt → Ứng dụng; iOS không có prompt nên hiện hướng dẫn "Chia sẻ → Thêm vào Màn hình chính". Chạy trong tab thì có Fullscreen API (nút + tùy chọn tự bật khi chạm). Đang chạy như app (`display-mode` standalone/fullscreen hoặc `navigator.standalone`) thì ẩn hết.
 - Cài đặt: tên, màu mắt, style mắt (Khối đặc kiểu robot / Có đồng tử), âm thanh, rung, từng cảm biến bật/tắt, giọng nhại, LLM, đặt "nhà" bằng GPS hiện tại, xóa dữ liệu.
 - `?debug=1`: bảng chọn mọi biểu cảm, slider nhu cầu, nút giả lập sự kiện cảm biến (lắc, rơi, mưa, mặt người…) để test trên desktop. `?gallery=1`: tự lướt qua mọi biểu cảm, mỗi cái 1.5 s.
 
@@ -232,3 +238,26 @@ Thu tối đa 6 s, phát lại `playbackRate` 1.5–1.8 (chipmunk), cộng ring-
 2. Mở `index.html?gallery=1` trên Chromium headless: không lỗi console; chụp ảnh từng biểu cảm thì hai mắt khác nhau rõ.
 3. Desktop không có cảm biến: chạy được hết, cảm biến báo "không hỗ trợ".
 4. Không có file ảnh hay âm thanh nào; tổng mã nguồn < 400 KB.
+
+## 9. Skin & Pose
+
+**Skin** ("Giao diện", `store.data.skin`) là cách vẽ *thân* Pipo, khác `theme` (màu mắt) và `style` (kiểu mắt) — hai thứ đó áp cho mọi skin. Renderer giữ một skin hiện hành (`setSkin`): `computeGeom(frame, pose)` lấy hình học gốc rồi cho `skin.geom` chỉnh (giữ nguyên cấu trúc vì chạm/cho ăn/hạt hiệu ứng dùng chung), `draw` gọi `skin.draw` vẽ toàn cảnh. Hàm vẽ một khuôn mặt (glow + hạt sau + mắt + miệng + nhiễu + hạt trước, có tuỳ chọn cắt vào một vùng) là helper dùng chung `drawFace`. Contract và cách thêm skin: README §"Thêm skin mới" và JSDoc `src/skins/index.js`.
+
+- `classic`: hành vi gốc, thêm nhún/lắc/nghiêng/ép theo pose.
+- `pixel` (ma trận LED): mặt dựng (không glow, không bóng đổ, nét miệng dày hơn và miệng rộng hơn) vào canvas offscreen ~34 ô trên một đơn vị khổ mặt, `getImageData`, rồi vẽ từng ô thành chấm LED: độ sáng theo mẫu, màu theo màu mẫu (nên tim hồng, má hồng vẫn đúng màu), ô tắt là lưới "ma" dựng sẵn một lần, quầng sáng bằng cách phóng to mượt canvas thấp rồi cộng sáng. Cache theo kích thước màn trong `resize`.
+- `eve`: đầu trứng ngang + kính mặt đen chứa đôi mắt của engine (thu nhỏ về khổ `1.78u`, mắt và miệng cắt trong kính, hạt/phụ kiện không bị cắt), thân trứng thuôn dưới, hai tay hình lá (xương sống uốn theo `curl`), đèn ngực và vòng cổ phát sáng theo màu mắt. `geom` trả mặt trong kính nên chạm/cho ăn/hạt đúng chỗ. Đầu bám pose sát, thân trễ pha bằng lò xo mềm nên nhún lệch nhẹ; cả robot bay lơ lửng (`hover`) trên bóng elip co giãn theo độ cao. Tay thấp vẽ trước đầu, tay giơ cao (che mặt, gãi đầu) vẽ sau đầu; chiều dài tay bị rút khi dang ngang và kẹp theo mép màn để vừa cả màn dọc lẫn ngang.
+
+**Pose** (`eyes/body.js`, thuần logic): `Body.update(dt, {expression, dance, t}) → {bob, sway, tilt, squash, hover, armL:{lift,spread,curl}, armR}` bằng lò xo (cứng hơn khi nhảy để bám nhịp, pha được đẩy tới trước bù độ trễ lò xo). `bob/sway/hover` theo phần của `U` (bob dương = hạ xuống), `tilt` radian, `squash` ~ ±0.15; tay: `lift` −1 rủ … +1 giơ thẳng, `spread` −1 khép/chéo vào … +1 dang ra, `curl` cuộn đầu tay vào. Ngoài lúc nhảy, tay theo bảng biểu cảm (`ARM_POSES`) cộng ngọ nguậy; thân theo `BODY_EXPR` (nảy khi vui, chùng khi buồn, rung khi sợ/lạnh). Mọi skin áp `bob/sway/tilt/squash`; chỉ skin có tay dùng `arm*`.
+
+## 10. Nghe nhạc & nhảy
+
+Luồng: `micro → AnalyserNode (FFT 2048, không làm mượt) mỗi 20 ms → BeatTracker → DanceDirector → Body/animator/fx`.
+
+1. **Onset** (`audio/beat.js`): phổ dB → tuyến tính → nén log `ln(1+300·m)`; spectral flux chỉ phần tăng (max-filter ±1 bin chống rung) theo ba dải kick 40–160 Hz · giữa 160–2k · cao 2k–8k, trọng số 1.5 / 0.6 / 0.35; trừ nền trung bình trượt 1 s; chuẩn hóa thích nghi theo đỉnh trôi 6 s có sàn tuyệt đối (nhiễu nền không bị khuếch đại). Ghi vào lưới 50 Hz.
+2. **Tempo**: tự tương quan trên ~7 s onset, chấm điểm từng lag 70–187 BPM bằng tổng lược `r(l)+½r(2l)+¼r(3l)` nhân ưu tiên log-Gauss quanh 120 BPM (khử nhầm nửa/đôi; cộng khối lượng đỉnh trong ±1 ô vì lưới 50 Hz xẻ chu kỳ lẻ vào hai ô kề), tinh chỉnh bằng nội suy parabol ở các bội của lag. BPM làm mượt; chênh > 4 % chỉ đổi khi bền vững ≥ 2,5 s.
+3. **Pha (PLL)**: lược nhịp trên onset gần nhất đo thời điểm nhịp thật; đồng hồ nhịp dự báo nhịp kế và bị kéo về (độ lợi 0.3) mỗi 0,24 s; bắn nhịp sớm ~30 ms (`lead`) để chuyển động đón trước. Cho `phase` 0..1 liên tục, `beatIndex`, `onBeat`; `stateAt(t)` ngoại suy pha giữa hai lần push.
+4. **Nhận diện nhạc**: `confidence` = độ mạnh đỉnh tự tương quan (trung bình ở các bội lag) × cổng hoạt động (0,9 s gần nhất còn onset đáng kể, mức năng lượng trên nền). Trễ hai chiều: giữ ≥ 1,5 s mới `isMusic=true` (tổng ~3 s kể từ lúc nhạc bắt đầu), dưới ngưỡng ≥ 2,4 s mới `false`. Tiếng nói, nhiễu trắng, vỗ tay lẻ không thành nhạc.
+5. **Dance director** (`brain/dance.js`): `notice` (~1,2 s, tò mò + `?` + liếc quanh) → `dance` → `outro` (~1,5 s, thỏa mãn) khi nhạc tắt. Động tác `bob · sway · step · tilt · hype` đổi mỗi 8 nhịp (ngẫu nhiên, `rng` tiêm vào, không lặp liền kề; `hype` chỉ khi năng lượng cao); biên độ theo năng lượng bài; bpm > 140 nhảy nửa tốc; năng lượng nhu cầu < 0,2 chỉ gật nhẹ với mắt lim dim; đang ngủ thì không nhảy. Body nhận `dance` để có squash đúng nhịp và tay vung theo động tác.
+6. **Nối vào Pipo** (`main.js`): biểu cảm `groove` giữ liên tục bằng một overlay gắn thẻ (không phát lại mỗi frame), miệng nhép theo năng lượng và nhịp (`o` ↔ cười), `jolt` nhỏ và nốt nhạc theo nhịp, nhạc kéo dài tăng `fun` rất chậm và trừ năng lượng rất nhẹ. Phản xạ có priority > 4 (chọc, nựng, ôm, cho ăn, lắc…) thắng, xong quay lại nhảy; phản xạ priority thấp bị bỏ qua khi đang nhảy. `mic:clap`, `mic:clap2`, `mic:loud` bị chặn khi có nhạc. Ẩn tab thì tạm dừng cảm biến.
+7. **Debug**: nút "Giả lập nhạc 120 BPM" thay `sensors.music` bằng `SyntheticBeat` (cùng dạng state) để thử trên desktop/headless.
+

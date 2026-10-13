@@ -9,13 +9,14 @@ export function defaults() {
     name: 'Pipo',
     theme: 'cyan',
     style: 'solid',
+    skin: 'classic',
     needs: null,
     lastSeen: 0,
     home: null,
     places: [],
     settings: {
-      sound: true, vibrate: true, tts: false, kiosk: false, wakeLock: true, mimicPreset: 'chipmunk',
-      sensors: { motion: true, compass: false, geo: false, weather: false, camera: false, mic: false, battery: true, voice: false, mimicFace: false },
+      sound: true, vibrate: true, tts: false, kiosk: false, wakeLock: true, mimicPreset: 'chipmunk', autoFullscreen: false, installHintOff: false,
+      sensors: { motion: true, compass: false, geo: false, weather: false, camera: false, mic: false, battery: true, voice: false, mimicFace: false, music: false },
       llm: { provider: 'none', baseUrl: '', apiKey: '', model: 'claude-haiku-5-5', monologue: false },
     },
   };

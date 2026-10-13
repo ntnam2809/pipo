@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
 const require = createRequire(import.meta.url);
 let pw;
@@ -14,7 +15,7 @@ if (!pw) { try { pw = require(path.join(process.env.NODE_PATH || '/tmp/claude-0/
 if (!pw) { console.error('Không tìm thấy playwright(-core). Cài ngoài repo rồi đặt NODE_PATH.'); process.exit(2); }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = process.argv[3] || '/tmp/claude-0/-home-user/b77a667f-c8fa-5701-b074-31dce3ce3aa5/scratchpad/shots';
+const outDir = process.argv[3] || process.env.SHOTS || path.join(os.tmpdir(), 'pipo-shots');
 mkdirSync(outDir, { recursive: true });
 
 let base = process.argv[2], srv = null;
@@ -104,6 +105,51 @@ async function open(url, viewport = { width: 390, height: 780 }) {
   await page.waitForTimeout(3000); await page.mouse.dblclick(195, 650); await page.waitForTimeout(700); await page.screenshot({ path: path.join(outDir, '_clock.png') });
   const inner = await page.evaluate(() => window.__pipo.errors.slice()); errs.push(...inner);
   console.log(`tương tác: lỗi ${errs.length}`); problems += errs.length; if (errs.length) console.log(errs);
+  await ctx.close();
+}
+// 5. skin: mỗi skin (classic · pixel · eve) ở gallery (query + hash), màn dọc + ngang, rồi đang nhảy với nhạc giả
+for (const skin of ['classic', 'pixel', 'eve']) {
+  for (const [vp, tag, url] of [[{ width: 390, height: 780 }, 'portrait', `/index.html?gallery=1&skin=${skin}`], [{ width: 844, height: 390 }, 'landscape', `/index.html#gallery&skin=${skin}`]]) {
+    const { ctx, page, errs } = await open(url, vp);
+    const got = await page.evaluate(() => window.__pipo.renderer.skin.id); if (got !== skin) errs.push(`skin ${skin}: renderer đang dùng ${got}`);
+    await page.waitForTimeout(2300); await page.screenshot({ path: path.join(outDir, `skin-${skin}-${tag}.png`) });
+    errs.push(...await page.evaluate(() => window.__pipo.errors.slice()));
+    console.log(`skin ${skin} ${tag} (gallery): lỗi ${errs.length}`); problems += errs.length; if (errs.length) console.log(errs);
+    await ctx.close();
+  }
+  const { ctx, page, errs } = await open(`/index.html?debug=1&skin=${skin}`);
+  await page.addStyleTag({ content: '#debug{display:none!important}' });
+  await page.screenshot({ path: path.join(outDir, `skin-${skin}-idle.png`) });
+  await page.evaluate(() => window.__pipo.setFakeMusic(true, 120)); await page.waitForTimeout(3600);
+  const d = await page.evaluate(() => ({ ph: window.__pipo.dance.phaseName, ex: window.__pipo.animator.expressionId, move: window.__pipo.dance.moveId }));
+  if (d.ph !== 'dance' || d.ex !== 'groove') errs.push(`${skin}: nhạc giả không làm Pipo nhảy (${JSON.stringify(d)})`);
+  await page.waitForTimeout(450); await page.screenshot({ path: path.join(outDir, `skin-${skin}-dance.png`) });
+  await page.evaluate(() => window.__pipo.bus.emit('touch:poke', { x: 0, y: 0 })); await page.waitForTimeout(300);
+  const ex1 = await page.evaluate(() => window.__pipo.animator.expressionId); if (ex1 !== 'surprised') errs.push(`${skin}: chọc khi đang nhảy phải thắng (được ${ex1})`);
+  await page.evaluate(() => window.__pipo.bus.emit('mic:clap', {})); await page.waitForTimeout(2300);
+  const ex2 = await page.evaluate(() => window.__pipo.animator.expressionId); if (ex2 !== 'groove') errs.push(`${skin}: sau phản xạ phải quay lại nhảy (được ${ex2})`);
+  await page.evaluate(() => window.__pipo.setFakeMusic(false)); await page.waitForTimeout(500);
+  const ph = await page.evaluate(() => window.__pipo.dance.phaseName); if (ph !== 'outro') errs.push(`${skin}: nhạc tắt phải vào outro (được ${ph})`);
+  errs.push(...await page.evaluate(() => window.__pipo.errors.slice()));
+  console.log(`skin ${skin} nhảy: lỗi ${errs.length}`); problems += errs.length; if (errs.length) console.log(errs);
+  await ctx.close();
+}
+// 6. nút debug "Giả lập nhạc", nút drawer 🎵, hàng cài đặt Giao diện + Nghe nhạc, đổi skin sống
+{
+  const { ctx, page, errs } = await open('/index.html?debug=1#debug&skin=pixel');
+  await page.click('#dbg-music'); await page.waitForTimeout(3500);
+  const on = await page.evaluate(() => window.__pipo.dance.phaseName); if (on !== 'dance') errs.push('nút giả lập nhạc không bật nhảy: ' + on);
+  await page.selectOption('#dbg-skin', 'eve'); await page.waitForTimeout(400);
+  const id = await page.evaluate(() => window.__pipo.renderer.skin.id); if (id !== 'eve') errs.push('đổi skin ở debug không ăn: ' + id);
+  await page.click('#dbg-music');
+  await page.click('#corner'); await page.waitForTimeout(400);
+  if (!(await page.locator('#btn-music').count())) errs.push('thiếu nút 🎵 trong drawer');
+  await page.screenshot({ path: path.join(outDir, '_drawer-music.png') });
+  await page.click('#btn-settings'); await page.waitForTimeout(300);
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#settings .frow')].map((r) => r.textContent));
+  if (!rows.some((t) => t.includes('Giao diện'))) errs.push('thiếu hàng Giao diện'); if (!rows.some((t) => t.includes('Nghe nhạc'))) errs.push('thiếu hàng Nghe nhạc');
+  errs.push(...await page.evaluate(() => window.__pipo.errors.slice()));
+  console.log(`debug nhạc + settings: lỗi ${errs.length}`); problems += errs.length; if (errs.length) console.log(errs);
   await ctx.close();
 }
 await browser.close(); if (srv) srv.kill();

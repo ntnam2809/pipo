@@ -1,13 +1,14 @@
 // Service worker: network-first (luôn lấy bản mới khi có mạng), mất mạng thì dùng cache để chạy offline. Đường dẫn tương đối nên chạy được dưới mọi sub-path.
-const CACHE = 'pipo-v3';
+const CACHE = 'pipo-v4';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './src/main.js', './src/core/spring.js', './src/core/bus.js', './src/core/store.js',
-  './src/eyes/params.js', './src/eyes/mouth.js', './src/eyes/expressions.js', './src/eyes/animator.js', './src/eyes/renderer.js', './src/eyes/fx.js',
-  './src/brain/needs.js', './src/brain/mood.js', './src/brain/reactions.js', './src/brain/rules.js', './src/brain/llm.js', './src/brain/gestures.js',
-  './src/sensors/motion.js', './src/sensors/compass.js', './src/sensors/geo.js', './src/sensors/weather.js', './src/sensors/camera.js', './src/sensors/mic.js', './src/sensors/battery.js', './src/sensors/clock.js',
-  './src/audio/sounds.js', './src/audio/chirp.js', './src/audio/mimic.js', './src/audio/voice.js',
-  './src/ui/dom.js', './src/ui/drawer.js', './src/ui/feed.js', './src/ui/settings.js', './src/ui/onboarding.js', './src/ui/debug.js',
+  './src/eyes/params.js', './src/eyes/mouth.js', './src/eyes/expressions.js', './src/eyes/animator.js', './src/eyes/renderer.js', './src/eyes/fx.js', './src/eyes/body.js',
+  './src/skins/index.js', './src/skins/classic.js', './src/skins/pixel.js', './src/skins/eve.js',
+  './src/brain/needs.js', './src/brain/mood.js', './src/brain/reactions.js', './src/brain/rules.js', './src/brain/llm.js', './src/brain/gestures.js', './src/brain/dance.js',
+  './src/sensors/motion.js', './src/sensors/compass.js', './src/sensors/geo.js', './src/sensors/weather.js', './src/sensors/camera.js', './src/sensors/mic.js', './src/sensors/music.js', './src/sensors/battery.js', './src/sensors/clock.js',
+  './src/audio/sounds.js', './src/audio/chirp.js', './src/audio/mimic.js', './src/audio/voice.js', './src/audio/beat.js',
+  './src/ui/dom.js', './src/ui/drawer.js', './src/ui/feed.js', './src/ui/settings.js', './src/ui/onboarding.js', './src/ui/debug.js', './src/ui/install.js',
 ];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

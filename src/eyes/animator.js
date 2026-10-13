@@ -85,7 +85,7 @@ export class Animator {
     const dur = clamp(Number(it.duration) || 2000, 150, 60000) / 1000;
     this.overlay = {
       id, intensity: clamp(it.intensity ?? 1, 0, 1), until: this.t + dur, lookAt: it.lookAt || null,
-      headShake: !!it.headShake, fx: it.fx || [], seq: it.lookSeq ? { t0: this.t, steps: it.lookSeq } : null, bounce: !!it.bounce,
+      headShake: !!it.headShake, fx: it.fx || [], seq: it.lookSeq ? { t0: this.t, steps: it.lookSeq } : null, bounce: !!it.bounce, tag: it.tag || null,
     };
   }
   clearOverlay() { this.overlay = null; }
@@ -98,6 +98,10 @@ export class Animator {
   setFeedApproach(p) { this.feed = clamp(p, 0, 1); }
   bite() { this.mouthOv = { until: this.t + 0.16, p: { open: 0, curve: 0.35, shape: 'smile', mw: 0.7 } }; this.lickAt = this.t + 1.1; this.blinkNow(); }
   triggerLick(sec = 0.3) { this.lick = this.t + sec; }
+  /** Đổi dáng miệng tức thời một lúc (hát: o <-> cười theo nhịp). */
+  pulseMouth(shape = 'o', sec = 0.18) { const p = shape === 'o' ? { shape: 'o', round: 0.85, open: 0.5, mw: 0.58, curve: 0 } : { shape, open: 0.3 }; this.mouthOv = { until: this.t + sec, p }; }
+  get overlayTag() { return this.overlay ? this.overlay.tag : null; }
+  get overlayLeft() { return this.overlay ? this.overlay.until - this.t : 0; }
   triggerYawn() { this.yawn = { t0: this.t }; }
   blinkNow() { if (!this.blink) this.blink = { t0: this.t, dur: 0.13 }; }
   jolt(amount = 0.5) { this.pulse = amount; }

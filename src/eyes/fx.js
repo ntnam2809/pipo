@@ -7,7 +7,7 @@ const POPS = ['blush', 'sunglasses', 'umbrella', 'anger', 'question', 'exclaim',
 
 export class FX {
   constructor(rng = Math.random) {
-    this.rng = rng; this.p = []; this.tm = {}; this.pop = {}; this.vel = {}; this.t = 0; this.active = new Set();
+    this.rng = rng; this.p = []; this.tm = {}; this.pop = {}; this.vel = {}; this.t = 0; this.active = new Set(); this.energy = 0.5;
     for (const k of POPS) { this.pop[k] = 0; this.vel[k] = 0; }
   }
   _emit(key, every, dt, fn) {
@@ -19,9 +19,15 @@ export class FX {
     if (name === 'crumbs') for (let i = 0; i < n; i++) this._crumb(geom);
     if (name === 'hearts') for (let i = 0; i < n; i++) this._heart(geom);
     if (name === 'sparkles') for (let i = 0; i < n; i++) this._spark(geom);
+    if (name === 'notes') for (let i = 0; i < n; i++) this._note(geom, this.energy);
   }
+  setEnergy(e) { this.energy = Math.max(0, Math.min(1, e || 0)); } // năng lượng nhạc: nốt bay cao/to hơn
   _heart(g) { const e = this.rng() < 0.5 ? g.L : g.R; this.add({ type: 'heart', x: e.x + (this.rng() - 0.5) * e.w, y: e.y - e.h * 0.4, vy: -g.U * 0.16, vx: (this.rng() - 0.5) * g.U * 0.05, life: 1.9, size: g.U * (0.035 + 0.04 * this.rng()), hue: 340 + this.rng() * 20, ph: this.rng() * TAU }); }
   _spark(g) { const a = this.rng() * TAU, d = g.D * (0.3 + 0.55 * this.rng()); this.add({ type: 'spark', x: g.cx + Math.cos(a) * d * 1.05, y: g.cy + Math.sin(a) * g.B * (0.55 + 0.35 * this.rng()), life: 0.8, size: g.U * (0.02 + 0.03 * this.rng()), hue: 45 + this.rng() * 30 }); }
+  _note(g, e = 0.5) { // nốt nhạc ♪ ♫ bay lên, lắc nhẹ
+    const sd = this.rng() < 0.5 ? -1 : 1;
+    this.add({ type: 'note', beam: this.rng() < 0.35, x: g.cx + sd * g.D * (0.5 + 0.35 * this.rng()), y: g.cy - g.B * (0.55 + 0.4 * this.rng()), vx: sd * g.U * 0.02, vy: -g.U * (0.1 + 0.1 * e + 0.05 * this.rng()), life: 1.7 + 0.5 * e, size: g.U * (0.034 + 0.02 * e + 0.012 * this.rng()), hue: 170 + this.rng() * 170, ph: this.rng() * TAU, rot: (this.rng() - 0.5) * 0.4 });
+  }
   _crumb(g) { const m = g.mouth; const sd = this.rng() < 0.5 ? -1 : 1; this.add({ type: 'crumb', x: m.x + sd * m.base * 0.5, y: m.y, vx: sd * g.U * (0.05 + 0.1 * this.rng()), vy: -g.U * (0.1 + 0.12 * this.rng()), ay: g.U * 1.6, life: 0.9, size: g.U * (0.008 + 0.008 * this.rng()), hue: 28 + this.rng() * 14, rot: this.rng() * TAU, vr: (this.rng() - 0.5) * 12 }); }
 
   update(dt, frame, g) {
@@ -36,6 +42,7 @@ export class FX {
     if (on.has('zzz')) this._emit('zzz', 1.5, dt, () => this.add({ type: 'z', x: g.R.x + g.R.w * 0.5, y: g.R.y - g.R.h * 0.25, vx: g.U * 0.045, vy: -g.U * 0.075, life: 2.7, size: g.U * 0.05 }));
     if (on.has('sleepbubble')) this._emit('sbub', 4.5, dt, () => this.add({ type: 'sbub', x: g.mouth.x + g.mouth.base * 0.3, y: g.mouth.y - g.U * 0.01, vx: 0, vy: -g.U * 0.01, life: 3.2, size: g.U * 0.05 }));
     if (on.has('bubbles')) this._emit('bub', 0.28, dt, () => this.add({ type: 'bubble', x: g.mouth.x + (this.rng() - 0.5) * g.mouth.base * 0.6, y: g.mouth.y - g.U * 0.01, vy: -g.U * (0.08 + 0.08 * this.rng()), vx: 0, life: 1.8, size: g.U * (0.012 + 0.022 * this.rng()), ph: this.rng() * TAU }));
+    if (on.has('notes')) this._emit('note', 0.9 - 0.5 * this.energy, dt, () => this._note(g, this.energy));
     if (on.has('crumbs')) this._emit('crumb', 0.14, dt, () => this._crumb(g));
     if (on.has('coldbreath')) this._emit('puff', 0.9, dt, () => this.add({ type: 'puff', x: g.mouth.x + g.U * 0.02, y: g.mouth.y + g.U * 0.03, vx: -g.U * 0.03, vy: -g.U * 0.045, life: 1.8, size: g.U * 0.025 }));
     if (on.has('umbrella')) this._emit('rain', 0.035, dt, () => this.add({ type: 'rain', x: this.rng() * g.W, y: -10, vy: g.U * (1.0 + 0.5 * this.rng()), vx: -g.U * 0.12, life: 1.3, size: g.U * 0.03 }));
@@ -47,6 +54,7 @@ export class FX {
     for (const q of this.p) {
       q.age += dt; q.vy += q.ay * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.rot += q.vr * dt;
       if (q.type === 'heart' || q.type === 'bubble') q.x += Math.sin(q.age * 3 + q.ph) * g.U * 0.04 * dt;
+      if (q.type === 'note') q.x += Math.sin(q.age * 4.2 + q.ph) * g.U * 0.07 * dt;
     }
     this.p = this.p.filter((q) => q.age < q.life);
   }
@@ -73,6 +81,7 @@ export class FX {
         case 'z': { ctx.scale(0.6 + u * 0.9, 0.6 + u * 0.9); ctx.rotate(-0.2); ctx.fillStyle = 'rgba(190,215,255,0.95)'; ctx.font = `800 ${s * 1.6}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('Z', 0, 0); break; }
         case 'sbub': { const r = s * (0.5 + 0.7 * Math.min(1, u * 1.2)); ctx.strokeStyle = 'rgba(190,230,255,0.8)'; ctx.fillStyle = 'rgba(190,230,255,0.15)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, u > 0.9 ? r * 1.3 : r, 0, TAU); ctx.fill(); ctx.stroke(); shineDot(ctx, r); break; }
         case 'bubble': { const r = s * (u > 0.85 ? 1 + (u - 0.85) * 4 : 1); ctx.strokeStyle = 'rgba(190,235,255,0.85)'; ctx.fillStyle = 'rgba(170,225,255,0.18)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); ctx.stroke(); shineDot(ctx, r); break; }
+        case 'note': { const sc = 0.6 + 0.4 * Math.min(1, u * 6); ctx.scale(sc, sc); ctx.rotate(Math.sin(q.age * 4.2 + q.ph) * 0.25); ctx.fillStyle = ctx.strokeStyle = hsl(q.hue, 90, 72); ctx.shadowColor = hsl(q.hue, 90, 65, 0.8); ctx.shadowBlur = s * 0.8; note(ctx, s, q.beam); break; }
         case 'crumb': { ctx.fillStyle = hsl(q.hue, 60, 55); ctx.fillRect(-s, -s, s * 2, s * 1.6); break; }
         case 'puff': { const r = s * (1 + u * 2.6); const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(235,245,255,0.55)'); gr.addColorStop(1, 'rgba(235,245,255,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); break; }
         case 'rain': { ctx.rotate(0.12); ctx.strokeStyle = 'rgba(160,200,255,0.55)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); break; }
@@ -150,3 +159,17 @@ function sparkle(ctx, s) { ctx.beginPath(); ctx.moveTo(0, -s); ctx.quadraticCurv
 function sparklePos(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); sparkle(ctx, Math.max(0.1, s)); ctx.restore(); }
 function drop(ctx, s) { ctx.beginPath(); ctx.moveTo(0, -s * 1.5); ctx.bezierCurveTo(s * 1.0, -s * 0.2, s * 1.0, s * 0.9, 0, s * 0.95); ctx.bezierCurveTo(-s * 1.0, s * 0.9, -s * 1.0, -s * 0.2, 0, -s * 1.5); ctx.closePath(); }
 function shineDot(ctx, r) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(-r * 0.35, -r * 0.35, r * 0.2, 0, TAU); ctx.fill(); }
+/** Nốt nhạc bằng path (không dùng font emoji): ♪ một nốt có cờ, ♫ hai nốt nối xà. */
+function note(ctx, s, beam) {
+  const hr = s * 0.42, sw = Math.max(1.4, s * 0.16);
+  const head = (x, y) => { ctx.beginPath(); ctx.ellipse(x, y, hr * 1.12, hr * 0.8, -0.45, 0, TAU); ctx.fill(); };
+  ctx.lineWidth = sw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (!beam) {
+    head(0, s * 0.62); const x = hr * 0.98;
+    ctx.beginPath(); ctx.moveTo(x, s * 0.55); ctx.lineTo(x, -s * 0.85); ctx.bezierCurveTo(x, -s * 0.2, x + s * 0.85, -s * 0.55, x + s * 0.55, s * 0.12); ctx.stroke();
+  } else {
+    const x0 = -s * 0.42, x1 = s * 0.5; head(x0, s * 0.62); head(x1, s * 0.4);
+    ctx.beginPath(); ctx.moveTo(x0 + hr * 0.98, s * 0.55); ctx.lineTo(x0 + hr * 0.98, -s * 0.75); ctx.moveTo(x1 + hr * 0.98, s * 0.33); ctx.lineTo(x1 + hr * 0.98, -s * 0.95); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0 + hr * 0.98, -s * 0.75); ctx.lineTo(x1 + hr * 0.98, -s * 0.95); ctx.lineWidth = sw * 2; ctx.stroke();
+  }
+}

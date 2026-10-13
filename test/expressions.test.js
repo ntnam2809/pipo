@@ -4,7 +4,7 @@ import { EXPRESSIONS, EXPRESSION_IDS, FX_NAMES, isExpression } from '../src/eyes
 import { validateEye, KEYS } from '../src/eyes/params.js';
 import { validateMouth, MOUTH_KEYS } from '../src/eyes/mouth.js';
 
-const REQUIRED = ['neutral', 'happy', 'joy', 'love', 'excited', 'wink', 'smug', 'curious', 'suspicious', 'surprised', 'shocked', 'scared', 'sad', 'cry', 'angry', 'annoyed', 'confused', 'dizzy', 'sleepy', 'sleeping', 'hungry', 'thirsty', 'eating', 'drinking', 'cold', 'hot', 'cool', 'rainy', 'blush', 'bored', 'focus', 'scanning', 'glitch'];
+const REQUIRED = ['neutral', 'happy', 'joy', 'love', 'excited', 'wink', 'smug', 'curious', 'suspicious', 'surprised', 'shocked', 'scared', 'sad', 'cry', 'angry', 'annoyed', 'confused', 'dizzy', 'sleepy', 'sleeping', 'hungry', 'thirsty', 'eating', 'drinking', 'cold', 'hot', 'cool', 'rainy', 'blush', 'bored', 'focus', 'scanning', 'glitch', 'groove'];
 
 test('có đủ biểu cảm theo §3.4 (>= 26)', () => {
   assert.ok(EXPRESSION_IDS.length >= 26);
@@ -47,6 +47,10 @@ test('đặc tả miệng theo hành vi §3.1b', () => {
   assert.equal(m('surprised').shape, 'o'); assert.equal(m('dizzy').shape, 'zigzag'); assert.ok(m('angry').skew !== 0 && m('angry').mw < m('neutral').mw);
   assert.equal(m('drinking').shape, 'o'); assert.ok(EXPRESSIONS.eating.loop.open > 0 && EXPRESSIONS.eating.loop.mx > 0);
   assert.ok(m('sleeping').curve > 0 && m('sleeping').open > 0);
+});
+test('groove: mắt cười khép hờ, miệng hát, có nốt nhạc', () => {
+  const g = EXPRESSIONS.groove; assert.equal(g.left.shape, 'arc'); assert.ok(g.fx.includes('notes')); assert.ok(g.loop.open > 0 && g.mouth.shape === 'smile');
+  assert.ok(FX_NAMES.includes('notes'));
 });
 test('hình đặc biệt có mặt trong bộ biểu cảm', () => {
   const shapes = new Set(EXPRESSION_IDS.map((i) => EXPRESSIONS[i].left.shape)); for (const s of ['heart', 'star', 'spiral', 'arc', 'line', 'normal']) assert.ok(shapes.has(s), s);

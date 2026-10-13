@@ -39,11 +39,12 @@ export function createDrawer(cb) {
   mimicBtn.addEventListener('pointerdown', down); mimicBtn.addEventListener('pointerup', up); mimicBtn.addEventListener('pointerleave', up); mimicBtn.addEventListener('pointercancel', up);
   const compassBtn = btn('🧭', 'La bàn', () => cb.onToggle('compass'), 'btn-compass');
   const cameraBtn = btn('📷', 'Camera', () => cb.onToggle('camera'), 'btn-camera');
+  const musicBtn = btn('🎵', 'Nghe nhạc', () => cb.onToggle('music'), 'btn-music');
   const el = h('div', { class: 'drawer', id: 'drawer', 'aria-hidden': 'true' },
     h('div', { class: 'grab' }),
     h('div', { class: 'needs' }, barEls),
     h('div', { class: 'row' },
-      btn('🍪', 'Ăn', () => showTray('food'), 'btn-food'), btn('💧', 'Uống', () => showTray('drink'), 'btn-drink'), mimicBtn, compassBtn, cameraBtn,
+      btn('🍪', 'Ăn', () => showTray('food'), 'btn-food'), btn('💧', 'Uống', () => showTray('drink'), 'btn-drink'), mimicBtn, compassBtn, cameraBtn, musicBtn,
       btn('⚙️', 'Cài đặt', () => { drawer.close(); cb.onSettings(); }, 'btn-settings')),
     tray);
   const corner = h('button', { class: 'corner', id: 'corner', 'aria-label': 'Mở menu', text: '☰', onclick: () => drawer.toggle() });
@@ -53,7 +54,7 @@ export function createDrawer(cb) {
     close() { drawer.isOpen = false; el.classList.remove('open'); el.setAttribute('aria-hidden', 'true'); corner.classList.remove('hide'); },
     toggle() { drawer.isOpen ? drawer.close() : drawer.open(); },
     setNeeds(v) { for (const k of Object.keys(bars)) bars[k].style.width = Math.round(Math.max(0, Math.min(1, v[k])) * 100) + '%'; for (const k of Object.keys(bars)) bars[k].parentElement.parentElement.classList.toggle('low', v[k] < 0.3); },
-    setActive(id, on) { const b = id === 'compass' ? compassBtn : id === 'camera' ? cameraBtn : null; if (b) b.classList.toggle('active', !!on); },
+    setActive(id, on) { const b = id === 'compass' ? compassBtn : id === 'camera' ? cameraBtn : id === 'music' ? musicBtn : null; if (b) b.classList.toggle('active', !!on); },
   };
   return drawer;
 }

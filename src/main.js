@@ -3,6 +3,8 @@ import { Bus } from './core/bus.js';
 import { Store } from './core/store.js';
 import { Animator } from './eyes/animator.js';
 import { Renderer } from './eyes/renderer.js';
+import { Body } from './eyes/body.js';
+import { getSkin } from './skins/index.js';
 import { FX } from './eyes/fx.js';
 import { EXPRESSION_IDS } from './eyes/expressions.js';
 import { Needs } from './brain/needs.js';
@@ -17,6 +19,9 @@ import { createGeoSensor } from './sensors/geo.js';
 import { createWeatherSensor } from './sensors/weather.js';
 import { createCameraSensor } from './sensors/camera.js';
 import { createMicSensor } from './sensors/mic.js';
+import { createMusicSensor } from './sensors/music.js';
+import { SyntheticBeat, IDLE_BEAT } from './audio/beat.js';
+import { DanceDirector } from './brain/dance.js';
 import { createBatterySensor } from './sensors/battery.js';
 import { createClock, formatClock } from './sensors/clock.js';
 import { Chirp } from './audio/chirp.js';
@@ -26,20 +31,26 @@ import { createDrawer } from './ui/drawer.js';
 import { createSettings } from './ui/settings.js';
 import { runOnboarding } from './ui/onboarding.js';
 import { createDebug } from './ui/debug.js';
+import { createInstall } from './ui/install.js';
 
 const params = new URLSearchParams(location.search);
-// ?debug=1 / ?gallery=1; trong artifact claude.ai chỉ có #debug / #gallery tới được trang.
-const hash = location.hash.slice(1);
-const DEBUG = params.get('debug') === '1' || hash === 'debug', GALLERY = params.get('gallery') === '1' || hash === 'gallery';
+// ?debug=1 / ?gallery=1 / ?skin=eve; trong artifact claude.ai chỉ có hash tới được trang: #debug · #gallery · #gallery&skin=eve.
+const hp = new URLSearchParams(location.hash.slice(1));
+const flag = (k) => params.get(k) === '1' || (hp.has(k) && hp.get(k) !== '0');
+const DEBUG = flag('debug'), GALLERY = flag('gallery');
+const urlSkin = params.get('skin') || hp.get('skin');
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const errors = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push('promise: ' + String(e.reason)));
 
 const store = new Store();
+if (urlSkin) store.data.skin = getSkin(urlSkin).id;
 const bus = new Bus();
 const canvas = document.getElementById('eyes');
 const renderer = new Renderer(canvas);
+renderer.setSkin(getSkin(store.data.skin));
+const body = new Body(), dancer = new DanceDirector();
 const animator = new Animator();
 const fx = new FX();
 const needs = new Needs(store.data.needs);
@@ -56,7 +67,7 @@ const settings = () => store.data.settings;
 const geo = createGeoSensor(bus, store);
 const sensors = {
   motion: createMotionSensor(bus), compass: createCompassSensor(bus), geo, weather: createWeatherSensor(bus, geo, store),
-  camera: createCameraSensor(bus), mic: createMicSensor(bus), battery: createBatterySensor(bus), voice: createVoiceInput(bus, () => store.data.name),
+  camera: createCameraSensor(bus), mic: createMicSensor(bus), music: createMusicSensor(bus), battery: createBatterySensor(bus), voice: createVoiceInput(bus, () => store.data.name),
 };
 const clock = createClock(bus);
 
@@ -102,6 +113,7 @@ function applyIntent(it) {
 
 // ---- bus ----
 bus.on('*', (name, p) => {
+  if (musicHeard && (name === 'mic:clap' || name === 'mic:clap2' || name === 'mic:loud')) return; // nhạc không làm Pipo giật mình
   if (name === 'motion:tilt') { animator.setTilt(p.gx, p.gy, p.gz); return; }
   if (name === 'motion:upsidedown') animator.setUpsideDown(true);
   if (name === 'motion:upright') animator.setUpsideDown(false);
@@ -145,10 +157,13 @@ const drawer = createDrawer({
   onDragCancel: () => { animator.setFeedApproach(0); },
   onMimicStart: startMimic, onMimicStop: stopMimic,
 });
+const installUI = createInstall({ store, onManual: () => { settingsUI.open(); installUI.section.scrollIntoView({ block: 'start' }); } });
 settingsUI = createSettings({
+  extra: installUI.section,
   store, sensors,
   onChange: async (k, v) => {
     if (k === 'theme' || k === 'style') animator.setTheme(store.data.theme, store.data.style);
+    if (k === 'skin') renderer.setSkin(getSkin(v));
     if (k === 'sound') chirp.enabled = v;
     if (k === 'sensor') { if (v.id === 'compass') compassOn = v.on; await syncSensor(v.id); drawer.setActive(v.id, sensors[v.id].status === 'on'); }
     if (k === 'mimicFace') await syncSensor('camera');
@@ -160,7 +175,8 @@ settingsUI = createSettings({
   onClose: () => {},
 });
 document.body.append(drawer.el, drawer.corner, settingsUI.el);
-if (DEBUG) document.body.append(createDebug({ bus, force: (id) => force(id), needs, animator }));
+if (!GALLERY) document.body.append(installUI.pill);
+if (DEBUG) document.body.append(createDebug({ bus, force: (id) => force(id), needs, animator, getSkin: () => store.data.skin, setSkin: (id) => { store.data.skin = getSkin(id).id; renderer.setSkin(getSkin(id)); }, toggleMusic: () => { setFakeMusic(!fake); return !!fake; } }));
 const chatForm = document.getElementById('chat'), chatIn = document.getElementById('chat-in');
 chatForm.hidden = settings().llm.provider === 'none' || GALLERY;
 // Chạy trong artifact claude.ai: có Claude sẵn thì bật làm não mặc định (người dùng chưa chọn provider nào khác).
@@ -280,32 +296,69 @@ function loop(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000); last = ts; lastDraw = ts; frames++;
   try { step(dt, ts); } catch (e) { errors.push('step: ' + (e && e.stack || e)); }
 }
+// ---- nghe nhạc & nhảy ----
+// Nguồn nhịp: micro (sensors.music) hoặc bộ phát giả khi debug. Dance director quyết định chú ý -> nhảy -> thỏa mãn;
+// phản xạ priority > DANCE_PRIORITY (chọc, nựng, cho ăn, lắc...) thắng, xong quay lại nhảy.
+const DANCE_PRIORITY = 4;
+let fake = null, dd = dancer.update(0, IDLE_BEAT), musicHeard = false, sing = 0, beatSeen = -1;
+function setFakeMusic(on, bpm = 120) { fake = on ? new SyntheticBeat(bpm) : null; return !!fake; }
+function musicState(dt) {
+  if (fake) return fake.update(dt);
+  const m = sensors.music; return m.status === 'on' && m.read ? m.read() : IDLE_BEAT;
+}
+function danceStep(dt, now) {
+  const bs = musicState(dt);
+  dd = dancer.update(dt, bs, { energyNeed: needs.get('energy'), asleep: brain.asleep });
+  musicHeard = dd.active || bs.isMusic; sing = 0;
+  if (dd.entered === 'outro') showSay('Hay quá!');
+  if (!dd.active) { if ((animator.overlayTag || '').startsWith('dance')) animator.clearOverlay(); return; }
+  brain.touched(now);
+  const cur = reactions.active(now);
+  if (cur && cur.priority <= DANCE_PRIORITY) reactions.cancel();
+  if (dd.phaseName === 'dance') {
+    const E = bs.energy, pulse = 0.5 + 0.5 * Math.cos(2 * Math.PI * bs.phase);
+    sing = Math.min(0.8, E * 0.55 * (0.55 + 0.45 * pulse));
+    fx.setEnergy(E);
+    if (bs.beatIndex !== beatSeen) {
+      beatSeen = bs.beatIndex; animator.jolt(0.08 + 0.18 * E);
+      if (bs.beatIndex % 2 === 0) fx.burst('notes', renderer.geom, E > 0.65 ? 2 : 1);
+      animator.pulseMouth(bs.beatIndex % 2 ? 'o' : 'smile', 0.2);
+    }
+    needs.add('fun', dt * 0.004); needs.add('energy', -dt * 0.0006);
+  }
+}
+function ensureDanceIntent() {
+  const tag = 'dance:' + dd.expression;
+  if (animator.overlayTag !== tag || animator.overlayLeft < 0.35) animator.applyIntent({ expression: dd.expression, intensity: dd.intensity, duration: 2500, fx: dd.fx, lookSeq: dd.lookSeq, tag });
+}
 function step(dt, ts) {
   const now = nowMs();
   if (!forced) {
     brain.tick(dt, now);
+    danceStep(dt, now);
     const cur = reactions.active(now);
     if (cur !== applied) { applied = cur; if (cur) applyIntent(cur); else animator.clearOverlay(); }
     if (now - lastBaseT > 400) { lastBaseT = now; const b = brain.baseExpression(now); animator.setBase(b.id, b.intensity); }
     if (now - lastIdle > 500) { lastIdle = now; brain.idle(now); }
-    if (listening) animator.setVoiceAmp(mimic.level);
-    else animator.setVoiceAmp(chirp.level());
+    if (dd.active && !reactions.active(now)) ensureDanceIntent();
+    animator.setVoiceAmp(Math.max(listening ? mimic.level : chirp.level(), sing));
     // la bàn: đồng tử chỉ Bắc, chấm nhỏ chỉ nhà
     if (compassOn && lastHeading != null) { const v = northVector(lastHeading); animator.setLook('compass', v.x * 0.9, v.y * 0.9, 0.5); }
     // độc thoại LLM
     const cfg = settings().llm;
     if (cfg.provider !== 'none' && cfg.monologue && now - monoT > 600000) { monoT = now; askLLM('', true); }
     if (hug.update(ptr.size, now)) bus.emit('touch:hug', {});
-  } else if (GALLERY) { /* gallery tự điều khiển */ }
+  } else { dd = dancer.update(dt, IDLE_BEAT, {}); musicHeard = false; sing = 0; } // gallery/debug ép biểu cảm: không nhảy
   const nightDim = settings().kiosk && (brain.world.hour >= 22 || brain.world.hour < 6) ? 0.45 : 0;
   const dim = Math.max(nightDim, brain.asleep && !forced ? 0.55 : 0);
   // tính frame
   const f = animator.update(dt);
-  renderer.computeGeom(f);
+  const pose = body.update(dt, { expression: f.expression, dance: dd.phaseName === 'dance' ? dd.dance : null, t: f.t });
+  renderer.computeGeom(f, pose);
   fx.update(dt, f, renderer.geom);
   let sayView = null;
   if (say) { const u = (now - say.t0) / say.dur; if (u >= 1) say = null; else sayView = { text: say.text, alpha: u < 0.1 ? u / 0.1 : u > 0.7 ? 1 - (u - 0.7) / 0.3 : 1 }; }
-  renderer.draw(f, fx, { say: sayView, dim });
+  renderer.draw(f, fx, { say: sayView, dim, pose });
   if (compassOn && homeBearing != null && lastHeading != null) drawHomeDot(f);
   if (now - lastNeedsUi > 1000) { lastNeedsUi = now; drawer.setNeeds(needs.snapshot()); }
   if (now - lastSave > 10000) { lastSave = now; save(); }
@@ -318,7 +371,7 @@ function save() { store.data.needs = needs.snapshot(); store.data.lastSeen = Dat
 window.addEventListener('pagehide', save);
 document.addEventListener('visibilitychange', () => {
   const hid = document.visibilityState === 'hidden';
-  for (const id of ['camera', 'mic']) if (sensors[id].pause) sensors[id].pause(hid);
+  for (const id of ['camera', 'mic', 'music']) if (sensors[id].pause) sensors[id].pause(hid);
   if (hid) save(); else { acquireWakeLock(); last = performance.now(); }
 });
 
@@ -330,7 +383,7 @@ brain.setWorld({ hour: new Date().getHours() + new Date().getMinutes() / 60 });
 if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) { /* không đăng ký SW ngoài http(s) */ }
 else navigator.serviceWorker.register('sw.js').catch(() => {});
 
-window.__pipo = { ids: EXPRESSION_IDS, force, unforce, bus, animator, brain, needs, errors, renderer, fx, sensors, get frames() { return frames; }, store };
+window.__pipo = { ids: EXPRESSION_IDS, force, unforce, bus, animator, brain, needs, errors, renderer, fx, sensors, body, dancer, setFakeMusic, getSkin, get dance() { return dd; }, get frames() { return frames; }, store };
 
 function startGallery() {
   let i = 0; const tick = () => { force(EXPRESSION_IDS[i % EXPRESSION_IDS.length]); const sel = document.getElementById('dbg-expr'); if (sel) sel.value = EXPRESSION_IDS[i % EXPRESSION_IDS.length]; i++; };

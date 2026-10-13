@@ -1,10 +1,10 @@
 // Renderer Canvas 2D: mắt tham số + mí cắt (clip), parallax, glow nửa độ phân giải, miệng nhỏ.
 import { MOUTH_BASE_FRAC, MOUTH_DROP } from './mouth.js';
 
-const BG = '#05070a';
-const hsl = (h, s, l, a = 1) => `hsla(${h.toFixed(1)},${s.toFixed(1)}%,${Math.max(0, Math.min(100, l)).toFixed(1)}%,${a})`;
+export const BG = '#05070a';
+export const hsl = (h, s, l, a = 1) => `hsla(${h.toFixed(1)},${s.toFixed(1)}%,${Math.max(0, Math.min(100, l)).toFixed(1)}%,${a})`;
 
-function rrect(ctx, x, y, w, h, r) {
+export function rrect(ctx, x, y, w, h, r) {
   r = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
   ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
@@ -51,17 +51,26 @@ export class Renderer {
     this.glowC = (typeof document !== 'undefined') ? document.createElement('canvas') : null;
     this.glowX = this.glowC ? this.glowC.getContext('2d') : null;
     this.W = 300; this.H = 600; this.dpr = 1; this.geom = null; this.vig = null;
+    this.skin = null; this.sk = {}; this.lineScale = 1; // sk: trạng thái riêng của từng skin (cache, lò xo) theo id
   }
+  /** Đổi skin (xem src/skins/index.js). */
+  setSkin(skin) { this.skin = skin; this.vig = null; if (skin && skin.resize) skin.resize(this); }
   resize(cssW, cssH, dprIn = 1) {
     const dpr = Math.min(2, dprIn || 1);
     this.dpr = dpr; this.W = Math.max(1, cssW); this.H = Math.max(1, cssH);
     this.canvas.width = Math.round(this.W * dpr); this.canvas.height = Math.round(this.H * dpr);
     if (this.glowC) { this.glowC.width = Math.max(1, Math.round(this.W / 2)); this.glowC.height = Math.max(1, Math.round(this.H / 2)); }
     this.vig = null;
+    if (this.skin && this.skin.resize) this.skin.resize(this);
   }
 
-  /** Tính hình học (pixel CSS) cho khung hiện tại. */
-  computeGeom(frame) {
+  /** Hình học (pixel CSS) cho khung hiện tại: hình học gốc, rồi skin chỉnh (vd. Eve thu mặt vào kính). */
+  computeGeom(frame, pose) {
+    const base = this._baseGeom(frame);
+    this.geom = this.skin && this.skin.geom ? this.skin.geom(base, frame, pose) : base;
+    return this.geom;
+  }
+  _baseGeom(frame) {
     const { W, H } = this;
     const U = Math.min(W, H * 1.15), B = 0.32 * U, D = 0.44 * U;
     const cx = W / 2, cy = H * 0.42;
@@ -73,35 +82,58 @@ export class Renderer {
     const L = mk(frame.L, -1), R = mk(frame.R, 1);
     const h0 = 1.35 * B;
     const mouthY = cy + (frame.L.y + frame.R.y) * 0.5 * B * 0.25 + MOUTH_DROP * h0 + 0.04 * h0;
-    this.geom = { W, H, U, B, D, cx, cy, L, R, mouth: { x: cx, y: mouthY, base: MOUTH_BASE_FRAC * D }, color: { h: frame.hue, s: frame.sat, l: frame.light } };
-    return this.geom;
+    return { W, H, U, B, D, cx, cy, L, R, mouth: { x: cx, y: mouthY, base: MOUTH_BASE_FRAC * D }, color: { h: frame.hue, s: frame.sat, l: frame.light } };
   }
 
   draw(frame, fx, extras = {}) {
-    const ctx = this.ctx, { W, H, dpr } = this;
-    const g = this.computeGeom(frame);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = this.computeGeom(frame, extras.pose);
+    if (this.skin) this.skin.draw(this, this.ctx, frame, fx, extras, g, extras.pose);
+  }
+
+  /** Nền gần đen + vignette (dùng chung cho skin tối). */
+  paintBg(ctx) {
+    const { W, H } = this;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
     if (!this.vig) { const v = ctx.createRadialGradient(W / 2, H * 0.42, Math.min(W, H) * 0.25, W / 2, H * 0.42, Math.max(W, H) * 0.8); v.addColorStop(0, 'rgba(10,16,24,0.0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)'); this.vig = v; }
     ctx.fillStyle = this.vig; ctx.fillRect(0, 0, W, H);
+  }
 
-    ctx.save();
-    if (frame.roll) { ctx.translate(W / 2, H * 0.42); ctx.rotate(frame.roll); ctx.translate(-W / 2, -H * 0.42); }
-    this._glow(ctx, frame, g);
+  /** Áp pose (nhún/lắc/nghiêng/ép) quanh tâm mặt: dùng trong cặp save/restore của skin. */
+  applyPose(ctx, g, pose, k = 1) {
+    if (!pose) return;
+    const u = g.U * k;
+    ctx.translate(g.cx + pose.sway * u, g.cy + pose.bob * u);
+    ctx.rotate(pose.tilt * k); ctx.scale(1 + pose.squash * 0.55, 1 - pose.squash);
+    ctx.translate(-g.cx, -g.cy);
+  }
+
+  /**
+   * Vẽ MỘT khuôn mặt: glow + fx sau + mắt + miệng + nhiễu + fx trước (hình học g). Skin gọi lại hàm này.
+   * o.glow=false: bỏ quầng sáng; o.clip(ctx): dựng path để cắt glow/mắt/miệng (Eve: trong kính mặt), fx không bị cắt.
+   */
+  drawFace(ctx, frame, fx, g, o = {}) {
+    const clip = o.clip ? () => { ctx.beginPath(); o.clip(ctx); ctx.clip(); } : null;
+    if (o.glow !== false) { ctx.save(); if (clip) clip(); this._glow(ctx, frame, g, o.glowK); ctx.restore(); }
     if (fx) fx.draw(ctx, g, 'back', frame);
+    ctx.save(); if (clip) clip();
     const gl = frame.fx.includes('glitch'); if (gl) this._fringe(ctx, frame, g);
     this._eye(ctx, frame, g, g.L, -1); this._eye(ctx, frame, g, g.R, 1);
     this._mouth(ctx, frame, g);
     if (gl) this._glitch(ctx, frame, g);
-    if (fx) fx.draw(ctx, g, 'front', frame);
     ctx.restore();
+    if (fx) fx.draw(ctx, g, 'front', frame);
+  }
 
+  /** Lớp chữ `say` + màn tối `dim` (cuối mỗi skin). */
+  drawOverlay(ctx, extras, g) {
+    const { W, H } = this;
     if (extras.say && extras.say.alpha > 0.02) this._say(ctx, extras.say, g);
     if (extras.dim > 0.01) { ctx.globalAlpha = Math.min(0.85, extras.dim); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   }
 
-  _glow(ctx, frame, g) {
+  _glow(ctx, frame, g, k = 1) {
     if (!this.glowX) return;
     const gx = this.glowX, c = this.glowC; gx.setTransform(1, 0, 0, 1, 0, 0); gx.clearRect(0, 0, c.width, c.height);
     const col = hsl(frame.hue, frame.sat, frame.light, 1);
@@ -116,7 +148,7 @@ export class Renderer {
     }
     const gm = frame.mouth; gx.save(); gx.scale(0.5, 0.5); gx.shadowBlur = g.U * 0.03; gx.globalAlpha = 0.4; gx.beginPath(); gx.arc(g.mouth.x - OFF, g.mouth.y, g.mouth.base * 0.4 * gm.mw, 0, 7); gx.fill(); gx.restore();
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = Math.min(1, 0.55 * (0.4 + 0.9 * (frame.L.glow + frame.R.glow) / 2));
+    ctx.globalAlpha = Math.min(1, 0.55 * k * (0.4 + 0.9 * (frame.L.glow + frame.R.glow) / 2));
     ctx.drawImage(c, 0, 0, this.W, this.H); ctx.restore();
   }
 
@@ -200,7 +232,7 @@ export class Renderer {
   _glitch(ctx, frame, g) {
     const t = frame.t;
     // dải ngang lệch
-    const cv = this.canvas, d = this.dpr;
+    const cv = ctx.canvas, d = cv.width / this.W;
     for (let i = 0; i < 4; i++) {
       const y = g.cy + (Math.sin(t * 40 + i * 7.3) * 0.6) * g.B, hh = g.B * (0.06 + 0.06 * ((i * 37) % 3)), off = Math.sin(t * 55 + i * 2.1) * g.U * 0.06;
       ctx.drawImage(cv, 0, y * d, cv.width, hh * d, off, y, this.W, hh);
@@ -212,7 +244,7 @@ export class Renderer {
     const u = g.mouth.base * m.mw; const a = u / 2; const t = frame.t;
     const hue = frame.hue, s = frame.sat, l = frame.light;
     const col = hsl(hue, s, l + 4, 0.92), dark = hsl(hue, s * 0.6, 7, 0.96);
-    const lw = Math.max(3, g.U * 0.017);
+    const lw = Math.max(3, g.U * 0.017) * this.lineScale;
     const jit = (n) => (m.wobble > 0.02 ? Math.sin(t * (50 + n * 13) + n) * m.wobble * a * 0.07 : 0);
     ctx.save(); ctx.translate(g.mouth.x + m.mx * a * 0.6 + jit(1), g.mouth.y + m.my * a * 0.6 + jit(2)); ctx.scale(k, k);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw;
