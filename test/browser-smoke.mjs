@@ -177,7 +177,7 @@ for (const skin of ['classic', 'pixel', 'eve']) {
   const tickAfter = async (page, days) => { await page.evaluate((d) => { window.__tOff = d; window.__pipo.telemetry.tick(); }, days); await page.waitForTimeout(250); };
 
   // 7a. mặc định (endpoint rỗng) và endpoint có nhưng hostname là localhost: không gom, không gửi
-  for (const [tag, hook] of [['endpoint rỗng', null], ['localhost', { endpoint: ENDPOINT }]]) {
+  for (const [tag, hook] of [['endpoint rỗng', null], ['localhost', { endpoint: ENDPOINT, hostname: 'localhost' }]]) {
     const { ctx, page } = await mkCtx(hook);
     await page.evaluate(() => { window.__pipo.bus.emit('touch:poke', {}); }); await tickAfter(page, 2);
     const stored = await page.evaluate(() => localStorage.getItem('pipo.telemetry'));
