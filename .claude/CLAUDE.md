@@ -1,6 +1,6 @@
 # pipo — Điều hướng (CLAUDE.md)
 
-<!-- TALIA-ROUTER:BEGIN v1 · nguồn talia-hq/router/block.md · sửa ở nguồn rồi chạy tools/router.py --apply -->
+<!-- TALIA-ROUTER:BEGIN v2 · nguồn talia-hq/router/block.md · sửa ở nguồn rồi chạy tools/router.py --apply -->
 ## Vai của phiên (router Talia)
 - **Có repo `talia-hq` trong phiên** (thư mục `talia-hq/` cạnh repo này): mặc định phiên là **Talia**, General Director, theo `talia-hq/.claude/CLAUDE.md`. Phần còn lại của file này **chưa áp dụng**.
 - **Anh Nam gọi đích danh manager của repo này** thì phiên chuyển sang vai manager và áp dụng toàn bộ file này cho tới khi anh nói `@talia` hoặc "về Talia". Cách gọi:
@@ -18,6 +18,12 @@
 | `@mdw` | `mdw_project` | MDW: Astrail Fan Heroes |
 | `@studio` | `neutrino-verse-studio` | Studio: Fiction · NChill · NV Studio · Lớp Học Diệu Kỳ |
 | `@pipo` | `pipo` | Pipo |
+
+### Nhật ký cho Talia (vai manager)
+- Mỗi round **có commit** thì thêm đúng **một dòng** vào `.talia/log.jsonl` ở gốc repo, trong cùng commit hoặc PR đó. Chỉ thêm dòng mới, không sửa hay xoá dòng cũ. Round chỉ hỏi đáp, không đổi file thì không ghi.
+- Mỗi dòng là một JSON, mỗi trường không quá một câu: `{"ts":"YYYY-MM-DDTHH:MM+07:00","project":"<id>","done":"…","next":"…","decide":"…","pr":"#N"|null,"ho":"HO-NNNN"|null}`. Trường nào không có thì để `null`.
+- `project` dùng id của Talia: `neutrinoverse-lore` · `out-of-reach` · `nvd` · `valdora-srpg` · `mdw` · `studio-fiction` · `nchill` · `studio-tools` · `edu-platform` · `pipo`.
+- Chỉ ghi tín hiệu trạng thái. Không chép lyrics, prose, lore hay code vào log.
 <!-- TALIA-ROUTER:END -->
 
 > Repo **Pipo**, pet robot đôi mắt (PWA). Dự án **ngoài NeutrinoVerse**: không áp luật lore, không tra canon.
