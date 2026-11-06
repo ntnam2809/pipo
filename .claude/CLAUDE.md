@@ -41,6 +41,7 @@
 - Không framework, không bundler, không npm dependency, **không file ảnh hoặc âm thanh**: mọi thứ vẽ và tổng hợp bằng code.
 - Bản phát triển còn có ở `neutrino-verse-studio/robo-pet/`. Nguồn chính nằm ở repo nào là câu hỏi anh Nam chưa chốt, nên đổi gì lớn thì hỏi trước.
 - **Không tự động monitor/babysit PR.** Tạo xong PR thì báo link và dừng.
+- Việc phụ cơ học cần LLM ngoài (dịch, nhãn, thử giọng TTS) → skill `gemini-free`. Key chỉ ở biến môi trường, không bao giờ vào mã hay PWA.
 
 ## Lệnh chuẩn
 `npm test` · `npm run serve` (mở http://localhost:8080)
